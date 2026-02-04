@@ -5,47 +5,81 @@ import { Separator } from '@/components/ui/separator';
 import { GridPicker } from './GridPicker';
 import { RowLengthControls } from './RowLengthControls';
 import { SurfaceDropdown } from './SurfaceDropdown';
-import { FacilityState, SurfaceType } from '@/types/facility';
+import { useFacilityStore } from '@/stores/facilityStore';
+import { SurfaceType } from '@/types/facility';
+import { useCallback } from 'react';
 
-interface ControlPanelProps {
-  state: FacilityState;
-  onGridSelect: (rows: number, cols: number) => void;
-  onUnevenToggle: (uneven: boolean) => void;
-  onRowLengthsChange: (rowLengths: number[]) => void;
-  onSurfaceChange: (surface: SurfaceType) => void;
-  onSpacingChange: (spacing: number) => void;
-  onShowNetChange: (show: boolean) => void;
-  onShowLinesChange: (show: boolean) => void;
-}
+export function ControlPanel() {
+  const {
+    config,
+    surfaceType,
+    spacing,
+    showNet,
+    showLines,
+    setConfig,
+    setSurfaceType,
+    setSpacing,
+    setShowNet,
+    setShowLines,
+  } = useFacilityStore();
 
-export function ControlPanel({
-  state,
-  onGridSelect,
-  onUnevenToggle,
-  onRowLengthsChange,
-  onSurfaceChange,
-  onSpacingChange,
-  onShowNetChange,
-  onShowLinesChange,
-}: ControlPanelProps) {
-  const isUneven = state.config.mode === 'uneven';
-  const rows = state.config.rows;
-  const cols = state.config.mode === 'even' ? state.config.cols : state.config.maxCols;
+  const isUneven = config.mode === 'uneven';
+  const rows = config.rows;
+  const cols = config.mode === 'even' ? config.cols : config.maxCols;
+
+  const handleGridSelect = useCallback((newRows: number, newCols: number) => {
+    if (config.mode === 'even') {
+      setConfig({ mode: 'even', rows: newRows, cols: newCols });
+    } else {
+      setConfig({
+        mode: 'uneven',
+        rows: newRows,
+        maxCols: newCols,
+        rowLengths: Array(newRows).fill(newCols),
+      });
+    }
+  }, [config.mode, setConfig]);
+
+  const handleUnevenToggle = useCallback((uneven: boolean) => {
+    if (uneven) {
+      const newRows = config.rows;
+      const newCols = config.mode === 'even' ? config.cols : config.maxCols;
+      setConfig({
+        mode: 'uneven',
+        rows: newRows,
+        maxCols: newCols,
+        rowLengths: Array(newRows).fill(newCols),
+      });
+    } else {
+      const newRows = config.rows;
+      const newCols = config.mode === 'uneven' ? config.maxCols : config.cols;
+      setConfig({ mode: 'even', rows: newRows, cols: newCols });
+    }
+  }, [config, setConfig]);
+
+  const handleRowLengthsChange = useCallback((rowLengths: number[]) => {
+    if (config.mode !== 'uneven') return;
+    setConfig({ ...config, rowLengths });
+  }, [config, setConfig]);
+
+  const handleSurfaceChange = useCallback((surface: SurfaceType) => {
+    setSurfaceType(surface);
+  }, [setSurfaceType]);
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-6 bg-background border-r border-border">
       <div>
         <h1 className="text-xl font-bold text-foreground">
-          Pickleball Facility Builder
+          Build Facility
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Design your indoor court layout
+          Configure your court layout
         </p>
       </div>
 
       <Separator />
 
-      <GridPicker onSelect={onGridSelect} />
+      <GridPicker onSelect={handleGridSelect} />
 
       {rows > 0 && cols > 0 && (
         <>
@@ -63,22 +97,22 @@ export function ControlPanel({
             <Switch
               id="uneven-toggle"
               checked={isUneven}
-              onCheckedChange={onUnevenToggle}
+              onCheckedChange={handleUnevenToggle}
             />
           </div>
 
-          {isUneven && state.config.mode === 'uneven' && (
+          {isUneven && config.mode === 'uneven' && (
             <RowLengthControls
               rows={rows}
-              maxCols={state.config.maxCols}
-              rowLengths={state.config.rowLengths}
-              onChange={onRowLengthsChange}
+              maxCols={config.maxCols}
+              rowLengths={config.rowLengths}
+              onChange={handleRowLengthsChange}
             />
           )}
 
           <Separator />
 
-          <SurfaceDropdown value={state.surfaceType} onChange={onSurfaceChange} />
+          <SurfaceDropdown value={surfaceType} onChange={handleSurfaceChange} />
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -86,15 +120,15 @@ export function ControlPanel({
                 Court Spacing
               </Label>
               <span className="text-xs font-mono text-muted-foreground">
-                {state.spacing.toFixed(1)}m
+                {spacing.toFixed(1)}m
               </span>
             </div>
             <Slider
-              value={[state.spacing]}
+              value={[spacing]}
               min={0.5}
               max={3}
               step={0.1}
-              onValueChange={([v]) => onSpacingChange(v)}
+              onValueChange={([v]) => setSpacing(v)}
             />
           </div>
 
@@ -107,8 +141,8 @@ export function ControlPanel({
               </Label>
               <Switch
                 id="show-net"
-                checked={state.showNet}
-                onCheckedChange={onShowNetChange}
+                checked={showNet}
+                onCheckedChange={setShowNet}
               />
             </div>
             <div className="flex items-center justify-between">
@@ -117,8 +151,8 @@ export function ControlPanel({
               </Label>
               <Switch
                 id="show-lines"
-                checked={state.showLines}
-                onCheckedChange={onShowLinesChange}
+                checked={showLines}
+                onCheckedChange={setShowLines}
               />
             </div>
           </div>

@@ -18,12 +18,62 @@ interface PickleballCourtProps {
   showLines?: boolean;
 }
 
-export function PickleballCourt({ 
-  surfaceType, 
-  showNet = true, 
-  showLines = true 
+// Shared geometries - created once, reused everywhere
+const sharedGeometries = {
+  surface: new THREE.BoxGeometry(COURT_WIDTH, 0.02, COURT_LENGTH),
+  sideline: new THREE.BoxGeometry(LINE_WIDTH, LINE_HEIGHT, COURT_LENGTH),
+  baseline: new THREE.BoxGeometry(COURT_WIDTH, LINE_HEIGHT, LINE_WIDTH),
+  nvzLine: new THREE.BoxGeometry(COURT_WIDTH, LINE_HEIGHT, LINE_WIDTH),
+  centerline: new THREE.BoxGeometry(LINE_WIDTH, LINE_HEIGHT, COURT_LENGTH / 2 - KITCHEN_DEPTH),
+  post: new THREE.CylinderGeometry(0.04, 0.04, NET_HEIGHT_SIDES, 8),
+};
+
+// Shared materials - created once
+const sharedMaterials = {
+  line: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, metalness: 0 }),
+  net: new THREE.MeshStandardMaterial({
+    color: '#1a1a1a',
+    roughness: 0.8,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide,
+  }),
+  post: new THREE.MeshStandardMaterial({ color: '#4a4a4a', roughness: 0.3, metalness: 0.6 }),
+};
+
+// Create net geometry with sag - net spans across X-axis (width of court)
+const createNetGeometry = () => {
+  const segments = 20;
+  // Net width is court width, height is net height
+  const geometry = new THREE.PlaneGeometry(COURT_WIDTH + 0.1, NET_HEIGHT_SIDES, segments, 4);
+  const positions = geometry.attributes.position;
+
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const y = positions.getY(i);
+
+    // Only modify top vertices (y > 0) to create sag
+    if (y > 0) {
+      // Parabolic sag - center is lower
+      const normalizedX = x / (COURT_WIDTH / 2);
+      const sagAmount = (NET_HEIGHT_SIDES - NET_HEIGHT_CENTER) * (1 - normalizedX * normalizedX);
+      positions.setY(i, y - sagAmount);
+    }
+  }
+
+  geometry.computeVertexNormals();
+  return geometry;
+};
+
+const netGeometry = createNetGeometry();
+
+export function PickleballCourt({
+  surfaceType,
+  showNet = true,
+  showLines = true,
 }: PickleballCourtProps) {
-  // Memoize materials
+  // Memoize surface material (changes with surfaceType)
   const surfaceMaterial = useMemo(() => {
     const config = SURFACE_MATERIALS[surfaceType];
     return new THREE.MeshStandardMaterial({
@@ -33,184 +83,96 @@ export function PickleballCourt({
     });
   }, [surfaceType]);
 
-  const lineMaterial = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: '#ffffff',
-      roughness: 0.5,
-      metalness: 0,
-    });
-  }, []);
-
-  const netMaterial = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: '#1a1a1a',
-      roughness: 0.8,
-      metalness: 0,
-      transparent: true,
-      opacity: 0.7,
-      side: THREE.DoubleSide,
-    });
-  }, []);
-
-  const postMaterial = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: '#4a4a4a',
-      roughness: 0.3,
-      metalness: 0.6,
-    });
-  }, []);
-
-  // Memoize geometries
-  const geometries = useMemo(() => {
-    const halfWidth = COURT_WIDTH / 2;
-    const halfLength = COURT_LENGTH / 2;
-
-    return {
-      // Court surface
-      surface: new THREE.BoxGeometry(COURT_WIDTH, 0.02, COURT_LENGTH),
-      
-      // Sidelines (long edges)
-      sideline: new THREE.BoxGeometry(LINE_WIDTH, LINE_HEIGHT, COURT_LENGTH),
-      
-      // Baselines (short edges)
-      baseline: new THREE.BoxGeometry(COURT_WIDTH, LINE_HEIGHT, LINE_WIDTH),
-      
-      // Centerline (from NVZ to baseline on each side)
-      centerlineLength: halfLength - KITCHEN_DEPTH,
-      centerline: new THREE.BoxGeometry(LINE_WIDTH, LINE_HEIGHT, halfLength - KITCHEN_DEPTH),
-      
-      // NVZ (kitchen) line
-      nvzLine: new THREE.BoxGeometry(COURT_WIDTH, LINE_HEIGHT, LINE_WIDTH),
-      
-      // Net post
-      post: new THREE.CylinderGeometry(0.04, 0.04, NET_HEIGHT_SIDES, 8),
-    };
-  }, []);
-
-  // Net geometry with sag
-  const netGeometry = useMemo(() => {
-    const segments = 20;
-    const geometry = new THREE.PlaneGeometry(COURT_WIDTH + 0.1, NET_HEIGHT_SIDES, segments, 1);
-    const positions = geometry.attributes.position;
-    
-    for (let i = 0; i < positions.count; i++) {
-      const x = positions.getX(i);
-      const y = positions.getY(i);
-      
-      // Only modify top vertices (y > 0)
-      if (y > 0) {
-        // Parabolic sag - center is lower
-        const normalizedX = x / (COURT_WIDTH / 2);
-        const sagAmount = (NET_HEIGHT_SIDES - NET_HEIGHT_CENTER) * (1 - normalizedX * normalizedX);
-        positions.setY(i, y - sagAmount);
-      }
-    }
-    
-    geometry.computeVertexNormals();
-    return geometry;
-  }, []);
-
   const halfWidth = COURT_WIDTH / 2;
   const halfLength = COURT_LENGTH / 2;
+  const centerlineLength = halfLength - KITCHEN_DEPTH;
 
   return (
     <group>
       {/* Court surface */}
-      <mesh 
-        geometry={geometries.surface} 
-        material={surfaceMaterial}
-        receiveShadow
-      />
+      <mesh geometry={sharedGeometries.surface} material={surfaceMaterial} receiveShadow />
 
       {showLines && (
         <group>
           {/* Left sideline */}
           <mesh
-            geometry={geometries.sideline}
-            material={lineMaterial}
+            geometry={sharedGeometries.sideline}
+            material={sharedMaterials.line}
             position={[-halfWidth + LINE_WIDTH / 2, LINE_HEIGHT / 2, 0]}
           />
-          
+
           {/* Right sideline */}
           <mesh
-            geometry={geometries.sideline}
-            material={lineMaterial}
+            geometry={sharedGeometries.sideline}
+            material={sharedMaterials.line}
             position={[halfWidth - LINE_WIDTH / 2, LINE_HEIGHT / 2, 0]}
           />
-          
+
           {/* Front baseline */}
           <mesh
-            geometry={geometries.baseline}
-            material={lineMaterial}
+            geometry={sharedGeometries.baseline}
+            material={sharedMaterials.line}
             position={[0, LINE_HEIGHT / 2, -halfLength + LINE_WIDTH / 2]}
           />
-          
+
           {/* Back baseline */}
           <mesh
-            geometry={geometries.baseline}
-            material={lineMaterial}
+            geometry={sharedGeometries.baseline}
+            material={sharedMaterials.line}
             position={[0, LINE_HEIGHT / 2, halfLength - LINE_WIDTH / 2]}
           />
-          
+
           {/* Front NVZ (kitchen) line */}
           <mesh
-            geometry={geometries.nvzLine}
-            material={lineMaterial}
+            geometry={sharedGeometries.nvzLine}
+            material={sharedMaterials.line}
             position={[0, LINE_HEIGHT / 2, -KITCHEN_DEPTH]}
           />
-          
+
           {/* Back NVZ (kitchen) line */}
           <mesh
-            geometry={geometries.nvzLine}
-            material={lineMaterial}
+            geometry={sharedGeometries.nvzLine}
+            material={sharedMaterials.line}
             position={[0, LINE_HEIGHT / 2, KITCHEN_DEPTH]}
           />
-          
+
           {/* Front centerline */}
           <mesh
-            geometry={geometries.centerline}
-            material={lineMaterial}
-            position={[
-              0, 
-              LINE_HEIGHT / 2, 
-              -KITCHEN_DEPTH - geometries.centerlineLength / 2
-            ]}
+            geometry={sharedGeometries.centerline}
+            material={sharedMaterials.line}
+            position={[0, LINE_HEIGHT / 2, -KITCHEN_DEPTH - centerlineLength / 2]}
           />
-          
+
           {/* Back centerline */}
           <mesh
-            geometry={geometries.centerline}
-            material={lineMaterial}
-            position={[
-              0, 
-              LINE_HEIGHT / 2, 
-              KITCHEN_DEPTH + geometries.centerlineLength / 2
-            ]}
+            geometry={sharedGeometries.centerline}
+            material={sharedMaterials.line}
+            position={[0, LINE_HEIGHT / 2, KITCHEN_DEPTH + centerlineLength / 2]}
           />
         </group>
       )}
 
       {showNet && (
         <group position={[0, 0, 0]}>
-          {/* Net mesh */}
+          {/* Net mesh - positioned at center, spanning across X-axis */}
           <mesh
             geometry={netGeometry}
-            material={netMaterial}
+            material={sharedMaterials.net}
             position={[0, NET_HEIGHT_SIDES / 2, 0]}
-            rotation={[0, Math.PI / 2, 0]}
+            rotation={[0, 0, 0]} // No rotation - plane already faces +Z by default
           />
-          
+
           {/* Left post */}
           <mesh
-            geometry={geometries.post}
-            material={postMaterial}
+            geometry={sharedGeometries.post}
+            material={sharedMaterials.post}
             position={[-halfWidth - 0.05, NET_HEIGHT_SIDES / 2, 0]}
           />
-          
+
           {/* Right post */}
           <mesh
-            geometry={geometries.post}
-            material={postMaterial}
+            geometry={sharedGeometries.post}
+            material={sharedMaterials.post}
             position={[halfWidth + 0.05, NET_HEIGHT_SIDES / 2, 0]}
           />
         </group>

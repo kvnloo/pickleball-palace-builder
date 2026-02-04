@@ -1,65 +1,54 @@
-
-
 ## Assumptions
 
 - **Unit system**: Using meters internally (1 ft = 0.3048 m) for Three.js consistency
 - **Axis system**: X = columns (left to right), Z = rows (front to back), Y = up
 - **Uneven row alignment**: Left-aligned (simpler, courts start from X=0)
 - **Default court spacing**: 1 meter (~3.28 ft) between courts
-- **Net rendering**: Simple plane mesh with slight sag approximation (lower in center)
+- **Net rendering**: Plane mesh spanning court width (X-axis) at center, with slight center sag
 - **Line rendering**: Thin BoxGeometry meshes (2 inches = 0.0508 m height above surface)
 - **Surface textures**: Procedural colors/materials only, no external images
 - **Initial camera**: Top-down angled view (45° pitch) looking at facility center
+
+### Homebase Extension Assumptions
+
+- **Pathfinding**: Manhattan routing through aisles (simplest, courts are obstacles)
+- **Robot dock**: Bottom-left corner of facility, offset from courts
+- **Simulation start**: 8:00 AM, default operating hours 8:00 AM - 10:00 PM
+- **Robot speed**: 0.8 m/s navigation, 0.4 m/s cleaning
+- **Cleaning time**: ~90 seconds per court (full traversal)
+- **Battery**: 100% capacity, drains 0.5% per meter, 3% per court cleaned, recharges 20%/min
+- **Cleanliness drop**: 30-60% randomly after use
+- **Players**: Capsule geometry (height 1.7m, radius 0.25m) with procedural idle animation
+- **Dirty overlay**: Semi-transparent overlay that fades as robot cleans
+- **Simulation speed**: 1×, 4×, 10× multipliers
+- **Session durations**: 60, 90, 120 minute options
+- **Buffer time**: 5, 10, 15 minute options
 
 ---
 
 ## Features
 
-### 1. Grid Picker Component
-- Interactive grid of small squares (max 10×10)
-- Hover highlights rectangular selection from (1,1) to current cell
-- Live "Cols × Rows" label updates on hover
-- Click commits selection and triggers facility generation
+### Phase 1: Facility Builder (Complete)
+1. Grid Picker Component - 10×10 selection
+2. Even/Uneven Mode Toggle with per-row sliders
+3. PickleballCourt 3D Component with accurate dimensions
+4. Facility Layout Engine with configurable spacing
+5. Surface Material Selector (4 options)
+6. 3D Scene Setup with OrbitControls
+7. UI Layout with split panels
 
-### 2. Even/Uneven Mode Toggle
-- **Even mode**: Simple grid with uniform rows × cols
-- **Uneven mode**: After grid selection, shows per-row sliders (1 to maxCols)
-- Data model updates in real-time, 3D view responds immediately
-
-### 3. PickleballCourt 3D Component
-- Accurate regulation dimensions:
-  - 20 ft × 44 ft playing surface
-  - 7 ft kitchen zones on each side of net
-  - Centerline dividing service courts
-  - 2-inch wide line markings as mesh geometry
-- Net with 36" height at sides, 34" at center
-- Memoized geometries and materials for performance
-- Props: `surfaceType`, `showNet`, `showLines`
-
-### 4. Facility Layout Engine
-- Positions courts in grid based on data model
-- Configurable spacing between courts
-- Left-aligns uneven rows
-- Updates dynamically as controls change
-
-### 5. Surface Material Selector
-- Dropdown with 4 options:
-  - Hardwood (maple gym) - warm brown, low roughness
-  - Rubber sports floor - dark gray, medium roughness
-  - Polypropylene tiles - bright blue, slight texture
-  - Vinyl/PU flooring - light gray-blue, smooth
-- Materials use color + roughness + metalness for visual distinction
-
-### 6. 3D Scene Setup
-- OrbitControls for camera manipulation
-- Ambient + directional lighting
-- Auto-adjusting camera to frame the facility
-- Optional: ground plane extending beyond courts
-
-### 7. UI Layout
-- Split view: left panel (controls) + right panel (3D canvas)
-- Clean, minimal CSS styling
-- Responsive controls that update 3D in real-time
+### Phase 2: Homebase Management System
+1. **App Modes**: Build Facility vs Homebase tabs
+2. **State Management**: Zustand store for all simulation state
+3. **Simulation Time**: Pausable clock with speed control
+4. **Court State Machine**: AVAILABLE_CLEAN → IN_USE → NEEDS_CLEANING → CLEANING
+5. **Booking System**: Auto-generation + manual creation/cancellation
+6. **Robot System**: Pudu CC1 model, pathfinding, cleaning animation
+7. **Player Visualization**: Capsule humans on active courts
+8. **Interactive Selection**: Click courts to select, multi-select support
+9. **Scheduling UI**: Generator panel + manual controls
+10. **Visual Overlays**: Status labels, dirty indicators, notifications
+11. **Persistence**: localStorage for layout, bookings, settings
 
 ---
 
@@ -68,22 +57,49 @@
 ### Component Structure
 ```
 App
-├── ControlPanel
-│   ├── GridPicker
-│   ├── UnevenToggle
-│   ├── RowLengthControls (conditional)
-│   ├── SpacingSlider
-│   └── SurfaceDropdown
-└── FacilityCanvas
-    ├── Lighting
-    ├── Controls (OrbitControls)
-    └── Facility
-        └── PickleballCourt (multiple instances)
+├── AppHeader (mode tabs, sim clock)
+├── BuildMode
+│   ├── ControlPanel (GridPicker, UnevenToggle, etc.)
+│   └── FacilityCanvas
+└── HomebaseMode
+    ├── HomebasePanel
+    │   ├── SimulationControls
+    │   ├── SchedulingPanel
+    │   ├── ManualControlPanel
+    │   ├── RobotStatusPanel
+    │   ├── CleaningQueuePanel
+    │   └── SelectedCourtCard
+    └── HomebaseCanvas
+        ├── InteractiveFacility
+        │   ├── SelectableCourt (with overlays)
+        │   ├── CourtStatusLabel
+        │   └── DirtyOverlay
+        ├── CleaningRobotCC1
+        ├── PlayerGroup
+        └── RobotDock
+```
+
+### State Management (Zustand)
+```
+useFacilityStore
+├── config: FacilityConfig
+├── surfaceType, spacing, showNet, showLines
+└── actions: setConfig, setSurface, etc.
+
+useSimulationStore
+├── currentTime: number (minutes since midnight)
+├── isPlaying: boolean
+├── speed: 1 | 4 | 10
+├── courts: Map<courtId, CourtState>
+├── bookings: Booking[]
+├── cleaningQueue: CleaningJob[]
+├── robots: Robot[]
+└── actions: tick, addBooking, dispatchRobot, etc.
 ```
 
 ### Data Flow
-- App holds facility config state
-- ControlPanel updates state via callbacks
-- FacilityCanvas reads state and renders courts
+- App holds mode state (build/homebase)
+- Zustand stores manage all simulation state
+- useFrame drives simulation tick
+- Components subscribe to relevant slices
 - All updates are reactive and immediate
-
