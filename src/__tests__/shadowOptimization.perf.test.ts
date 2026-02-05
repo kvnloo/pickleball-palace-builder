@@ -303,12 +303,14 @@ describe('shouldCastShadow distance-based LOD', () => {
   });
 
   it('halved threshold for balls makes them lose shadows sooner', () => {
-    const cameraX = 0, cameraY = 50, cameraZ = 0;
-    const objX = 45, objY = 1, objZ = 45;
+    const cameraX = 0, cameraY = 40, cameraZ = 0;
+    const objX = 30, objY = 0, objZ = 30;
     const playerThreshold = 80;
     const ballThreshold = playerThreshold / 2; // 40
 
-    // At this distance (~88 units), player still casts but ball does not
+    // Distance = sqrt(30^2 + 40^2 + 30^2) = sqrt(3400) ~ 58.3
+    // Player threshold 80: 58.3 <= 80 => true
+    // Ball threshold 40: 58.3 <= 40 => false
     const playerResult = shouldCastShadow(cameraX, cameraY, cameraZ, objX, objY, objZ, playerThreshold);
     const ballResult = shouldCastShadow(cameraX, cameraY, cameraZ, objX, objY, objZ, ballThreshold);
 
@@ -322,13 +324,16 @@ describe('shouldCastShadow distance-based LOD', () => {
 // ---------------------------------------------------------------------------
 describe('shadow LOD performance', () => {
   it('shouldCastShadow for 1000 objects completes in < 0.1ms', () => {
-    const cameraX = 50, cameraY = 80, cameraZ = 50;
+    const cameraX = 50, cameraY = 30, cameraZ = 50;
     const threshold = 80;
 
-    // Generate 1000 random positions
+    // Generate 1000 positions spread evenly -- some near, some far
     const objects: [number, number, number][] = [];
     for (let i = 0; i < 1000; i++) {
-      objects.push([Math.random() * 500, 0, Math.random() * 500]);
+      // Use deterministic spread: 0 to 200 in both X and Z
+      const x = (i % 32) * 6.25;
+      const z = Math.floor(i / 32) * 6.25;
+      objects.push([x, 0, z]);
     }
 
     // Warm up
