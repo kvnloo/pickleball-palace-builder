@@ -1,5 +1,8 @@
 import { COURT_WIDTH, COURT_LENGTH } from '@/types/facility';
 
+// Net zone - robot cannot cross through center of court
+const NET_ZONE_HALF_WIDTH = 0.5; // 0.5m on each side of net centerline
+
 interface Point {
   x: number;
   z: number;
@@ -106,7 +109,9 @@ export class FacilityPathfinder {
   }
 
   /**
-   * Generate lawnmower cleaning path across a court
+   * Generate lawnmower cleaning path across a court.
+   * IMPORTANT: Path avoids the net by cleaning each half separately,
+   * navigating around the net post between halves.
    */
   getCleaningPath(row: number, col: number): Point[] {
     const center = this.getCourtCenter(row, col);
@@ -114,24 +119,55 @@ export class FacilityPathfinder {
     const stripeWidth = 0.5; // Width of each cleaning stripe
     const halfWidth = COURT_WIDTH / 2 - 0.2;
     const halfLength = COURT_LENGTH / 2 - 0.2;
+    
+    // Net is at Z = center.z, robot must clean each half separately
+    const netZ = center.z;
+    const netClearance = 0.3; // Stay 0.3m away from net
 
-    // Start from top-left corner
+    // PHASE 1: Clean the negative-Z half (before net)
     let currentX = center.x - halfWidth;
-    let direction = 1; // 1 = going positive Z, -1 = going negative Z
-
+    let direction = 1;
+    
     while (currentX <= center.x + halfWidth) {
       if (direction === 1) {
-        path.push({ x: currentX, z: center.z - halfLength });
-        path.push({ x: currentX, z: center.z + halfLength });
+        path.push({ x: currentX, z: netZ - halfLength });
+        path.push({ x: currentX, z: netZ - netClearance });
       } else {
-        path.push({ x: currentX, z: center.z + halfLength });
-        path.push({ x: currentX, z: center.z - halfLength });
+        path.push({ x: currentX, z: netZ - netClearance });
+        path.push({ x: currentX, z: netZ - halfLength });
       }
       
       currentX += stripeWidth;
       direction *= -1;
     }
-
+    
+    // PHASE 2: Navigate around the net post (right side)
+    // Exit to the right edge of court, go around the post
+    const rightPostX = center.x + halfWidth + 0.3;
+    const lastX = currentX - stripeWidth;
+    
+    // Move to right edge at current Z
+    path.push({ x: rightPostX, z: netZ - netClearance });
+    // Go around the net (past the post)
+    path.push({ x: rightPostX, z: netZ + netClearance });
+    
+    // PHASE 3: Clean the positive-Z half (after net)
+    currentX = center.x + halfWidth;
+    direction = -1;
+    
+    while (currentX >= center.x - halfWidth) {
+      if (direction === -1) {
+        path.push({ x: currentX, z: netZ + netClearance });
+        path.push({ x: currentX, z: netZ + halfLength });
+      } else {
+        path.push({ x: currentX, z: netZ + halfLength });
+        path.push({ x: currentX, z: netZ + netClearance });
+      }
+      
+      currentX -= stripeWidth;
+      direction *= -1;
+    }
+    
     return path;
   }
 }

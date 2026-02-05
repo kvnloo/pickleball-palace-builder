@@ -1,5 +1,4 @@
 import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { RobotStatus } from '@/types/facility';
 
@@ -30,35 +29,42 @@ const screenActiveMaterial = new THREE.MeshStandardMaterial({ color: '#00ff88', 
 const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.8 });
 const brushMaterial = new THREE.MeshStandardMaterial({ color: '#4a9eff', roughness: 0.7 });
 
+// Pre-created status light materials
+const statusLightMaterials = {
+  cleaning: new THREE.MeshStandardMaterial({ color: '#8b5cf6', emissive: '#8b5cf6', emissiveIntensity: 0.8 }),
+  navigating: new THREE.MeshStandardMaterial({ color: '#3b82f6', emissive: '#3b82f6', emissiveIntensity: 0.8 }),
+  charging: new THREE.MeshStandardMaterial({ color: '#22c55e', emissive: '#22c55e', emissiveIntensity: 0.8 }),
+  idle: new THREE.MeshStandardMaterial({ color: '#94a3b8', emissive: '#94a3b8', emissiveIntensity: 0.8 }),
+};
+
+// Status light geometry
+const statusLightGeometry = new THREE.SphereGeometry(0.03, 8, 8);
+
+// Pre-created battery materials
+const batteryMaterials = {
+  high: new THREE.MeshStandardMaterial({ color: '#22c55e', emissive: '#22c55e', emissiveIntensity: 0.5 }),
+  medium: new THREE.MeshStandardMaterial({ color: '#f59e0b', emissive: '#f59e0b', emissiveIntensity: 0.5 }),
+  low: new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#ef4444', emissiveIntensity: 0.5 }),
+};
+
 export function CleaningRobotCC1({ position, rotation = 0, status, battery }: CleaningRobotCC1Props) {
   const groupRef = useRef<THREE.Group>(null);
-  const brushRef = useRef<THREE.Mesh>(null);
-  const wheelRefs = useRef<THREE.Mesh[]>([]);
-
-  // Animate brush and wheels
-  useFrame((_, delta) => {
-    if (status === 'cleaning' || status === 'navigating') {
-      // Spin brush
-      if (brushRef.current) {
-        brushRef.current.rotation.y += delta * 10;
-      }
-      // Rotate wheels
-      wheelRefs.current.forEach((wheel) => {
-        if (wheel) {
-          wheel.rotation.x += delta * 5 * (status === 'cleaning' ? 0.5 : 1);
-        }
-      });
-    }
-  });
 
   const currentScreenMaterial = status === 'idle' || status === 'charging' ? screenMaterial : screenActiveMaterial;
 
-  // Battery indicator color
-  const batteryColor = battery > 60 ? '#22c55e' : battery > 30 ? '#f59e0b' : '#ef4444';
-  const batteryMaterial = useMemo(() => 
-    new THREE.MeshStandardMaterial({ color: batteryColor, emissive: batteryColor, emissiveIntensity: 0.5 }),
-    [batteryColor]
-  );
+  // Use pre-created battery material
+  const batteryMaterial = battery > 60 ? batteryMaterials.high 
+    : battery > 30 ? batteryMaterials.medium 
+    : batteryMaterials.low;
+  
+  // Use pre-created status light material
+  const statusLightMaterial = status === 'cleaning' ? statusLightMaterials.cleaning
+    : status === 'navigating' ? statusLightMaterials.navigating
+    : status === 'charging' ? statusLightMaterials.charging
+    : statusLightMaterials.idle;
+  
+  // Battery indicator width
+  const batteryWidth = ROBOT_WIDTH * 0.3 * (battery / 100);
 
   return (
     <group ref={groupRef} position={[position.x, 0, position.z]} rotation={[0, rotation, 0]}>
@@ -77,8 +83,8 @@ export function CleaningRobotCC1({ position, rotation = 0, status, battery }: Cl
 
       {/* Battery indicator */}
       <mesh position={[0, ROBOT_HEIGHT * 0.7, ROBOT_LENGTH * 0.45]}>
-        <boxGeometry args={[ROBOT_WIDTH * 0.3 * (battery / 100), 0.02, 0.01]} />
-        <primitive object={batteryMaterial} />
+        <boxGeometry args={[batteryWidth, 0.02, 0.01]} />
+        <primitive object={batteryMaterial} attach="material" />
       </mesh>
 
       {/* Wheels */}
@@ -90,7 +96,6 @@ export function CleaningRobotCC1({ position, rotation = 0, status, battery }: Cl
       ].map((pos, i) => (
         <mesh
           key={i}
-          ref={(el) => { if (el) wheelRefs.current[i] = el; }}
           geometry={wheelGeometry}
           material={wheelMaterial}
           position={[pos.x, 0.06, pos.z]}
@@ -101,7 +106,6 @@ export function CleaningRobotCC1({ position, rotation = 0, status, battery }: Cl
 
       {/* Side brush */}
       <mesh
-        ref={brushRef}
         geometry={brushGeometry}
         material={brushMaterial}
         position={[-ROBOT_WIDTH * 0.35, 0.02, ROBOT_LENGTH * 0.4]}
@@ -109,14 +113,11 @@ export function CleaningRobotCC1({ position, rotation = 0, status, battery }: Cl
       />
 
       {/* Status light */}
-      <mesh position={[0, ROBOT_HEIGHT + 0.05, 0]}>
-        <sphereGeometry args={[0.03, 8, 8]} />
-        <meshStandardMaterial
-          color={status === 'cleaning' ? '#8b5cf6' : status === 'navigating' ? '#3b82f6' : status === 'charging' ? '#22c55e' : '#94a3b8'}
-          emissive={status === 'cleaning' ? '#8b5cf6' : status === 'navigating' ? '#3b82f6' : status === 'charging' ? '#22c55e' : '#94a3b8'}
-          emissiveIntensity={0.8}
-        />
-      </mesh>
+      <mesh 
+        position={[0, ROBOT_HEIGHT + 0.05, 0]}
+        geometry={statusLightGeometry}
+        material={statusLightMaterial}
+      />
     </group>
   );
 }

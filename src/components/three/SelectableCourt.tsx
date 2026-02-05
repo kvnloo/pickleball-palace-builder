@@ -20,11 +20,44 @@ interface SelectableCourtProps {
   onSelect: (courtId: string, shiftKey: boolean) => void;
 }
 
-// Selection outline geometry
-const outlineGeometry = new THREE.BoxGeometry(COURT_WIDTH + 0.2, 0.05, COURT_LENGTH + 0.2);
+// Shared geometries - created once, reused by all courts
+const sharedGeometries = {
+  outline: new THREE.BoxGeometry(COURT_WIDTH + 0.2, 0.05, COURT_LENGTH + 0.2),
+  overlay: new THREE.PlaneGeometry(COURT_WIDTH - 0.1, COURT_LENGTH - 0.1),
+  clickTarget: new THREE.BoxGeometry(COURT_WIDTH, 0.5, COURT_LENGTH),
+  statusRing: new THREE.RingGeometry(COURT_WIDTH / 2 + 0.05, COURT_WIDTH / 2 + 0.15, 32),
+};
 
-// Dirty overlay geometry
-const overlayGeometry = new THREE.PlaneGeometry(COURT_WIDTH - 0.1, COURT_LENGTH - 0.1);
+// Pooled materials - avoid recreation on state changes
+const pooledMaterials = {
+  selected: new THREE.MeshBasicMaterial({ color: '#60a5fa', transparent: true, opacity: 0.8 }),
+  hovered: new THREE.MeshBasicMaterial({ color: '#a5b4fc', transparent: true, opacity: 0.5 }),
+  clickTarget: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }),
+  // Dirty overlays at different opacity levels (pre-computed)
+  dirty: [
+    null, // 100% clean
+    new THREE.MeshBasicMaterial({ color: '#7c2d12', transparent: true, opacity: 0.08, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: '#7c2d12', transparent: true, opacity: 0.16, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: '#7c2d12', transparent: true, opacity: 0.24, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: '#7c2d12', transparent: true, opacity: 0.32, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: '#7c2d12', transparent: true, opacity: 0.4, side: THREE.DoubleSide }),
+  ] as (THREE.MeshBasicMaterial | null)[],
+  // Status ring materials
+  statusRings: new Map<string, THREE.MeshBasicMaterial>(),
+};
+
+// Get or create status ring material
+function getStatusRingMaterial(color: string, opacity: number): THREE.MeshBasicMaterial {
+  const key = `${color}-${opacity}`;
+  if (!pooledMaterials.statusRings.has(key)) {
+    pooledMaterials.statusRings.set(key, new THREE.MeshBasicMaterial({ 
+      color, 
+      transparent: true, 
+      opacity 
+    }));
+  }
+  return pooledMaterials.statusRings.get(key)!;
+}
 
 export function SelectableCourt({
   courtState,
@@ -56,27 +89,19 @@ export function SelectableCourt({
   // Status-based materials
   const statusColor = getStatusColor(courtState.status);
   
-  const outlineMaterial = useMemo(() => {
-    if (isSelected) {
-      return new THREE.MeshBasicMaterial({ color: '#60a5fa', transparent: true, opacity: 0.8 });
-    }
-    if (isHovered) {
-      return new THREE.MeshBasicMaterial({ color: '#a5b4fc', transparent: true, opacity: 0.5 });
-    }
-    return null;
-  }, [isSelected, isHovered]);
+  // Use pooled materials instead of creating new ones
+  const outlineMaterial = isSelected ? pooledMaterials.selected 
+    : isHovered ? pooledMaterials.hovered 
+    : null;
 
-  // Dirty overlay material (shows when cleanliness < 100)
-  const dirtyOverlayMaterial = useMemo(() => {
-    if (courtState.cleanliness >= 100) return null;
-    const opacity = (100 - courtState.cleanliness) / 100 * 0.4;
-    return new THREE.MeshBasicMaterial({
-      color: '#7c2d12',
-      transparent: true,
-      opacity,
-      side: THREE.DoubleSide,
-    });
-  }, [courtState.cleanliness]);
+  // Use pooled dirty materials (quantized to 5 levels for performance)
+  const dirtyLevel = courtState.cleanliness >= 100 ? 0 
+    : Math.min(5, Math.ceil((100 - courtState.cleanliness) / 20));
+  const dirtyOverlayMaterial = pooledMaterials.dirty[dirtyLevel];
+  
+  // Use pooled status ring material
+  const ringOpacity = isHovered || isSelected ? 0.8 : 0.3;
+  const statusRingMaterial = getStatusRingMaterial(statusColor, ringOpacity);
 
   return (
     <group position={[position.x, 0, position.z]}>
@@ -86,9 +111,9 @@ export function SelectableCourt({
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
         visible={false}
+        geometry={sharedGeometries.clickTarget}
+        material={pooledMaterials.clickTarget}
       >
-        <boxGeometry args={[COURT_WIDTH, 0.5, COURT_LENGTH]} />
-        <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
       {/* The court itself */}
@@ -97,7 +122,7 @@ export function SelectableCourt({
       {/* Dirty overlay */}
       {dirtyOverlayMaterial && (
         <mesh
-          geometry={overlayGeometry}
+          geometry={sharedGeometries.overlay}
           material={dirtyOverlayMaterial}
           position={[0, 0.03, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
@@ -106,14 +131,16 @@ export function SelectableCourt({
 
       {/* Selection/hover outline */}
       {outlineMaterial && (
-        <mesh geometry={outlineGeometry} material={outlineMaterial} position={[0, -0.02, 0]} />
+        <mesh geometry={sharedGeometries.outline} material={outlineMaterial} position={[0, -0.02, 0]} />
       )}
 
       {/* Status indicator ring */}
-      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[COURT_WIDTH / 2 + 0.05, COURT_WIDTH / 2 + 0.15, 32]} />
-        <meshBasicMaterial color={statusColor} transparent opacity={isHovered || isSelected ? 0.8 : 0.3} />
-      </mesh>
+      <mesh 
+        geometry={sharedGeometries.statusRing}
+        material={statusRingMaterial}
+        position={[0, 0.01, 0]} 
+        rotation={[-Math.PI / 2, 0, 0]}
+      />
     </group>
   );
 }
