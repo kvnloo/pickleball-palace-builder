@@ -1,0 +1,54 @@
+[
+  {
+    "iteration_id": 14,
+    "parent_step_id": 189,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "Create computeBridge.ts with ComputeBridge interface",
+    "description": "Create the bridge module that defines the IComputeBridge interface and exports the factory function.",
+    "target_file": "src/workers/computeBridge.ts",
+    "exact_instructions": "Create src/workers/computeBridge.ts. Define interface IComputeBridge with methods: init(courtCount, robotCount), step(deltaTime), readBallState(courtIndex), readPlayerState(courtIndex, playerIndex), readRobotState(robotIndex), readGameState(courtIndex), destroy(), isWorkerMode(). Export createComputeBridge() factory.",
+    "code_snippet": "export interface IComputeBridge {\n  init(courtCount: number, robotCount: number): Promise<void>;\n  step(deltaTime: number): void;\n  readBallState(courtIndex: number): BallReadout;\n  readPlayerState(courtIndex: number, playerIndex: number): PlayerReadout;\n  readRobotState(robotIndex: number): RobotReadout;\n  readGameState(courtIndex: number): GameReadout;\n  destroy(): void;\n  isWorkerMode(): boolean;\n}",
+    "confidence_score": 9.3,
+    "status": "pending"
+  },
+  {
+    "iteration_id": 14,
+    "parent_step_id": 189,
+    "resolution": "L2",
+    "sequence_number": 2,
+    "title": "Implement WorkerBridge class in computeBridge.ts",
+    "description": "Implement the WorkerBridge class that creates the Web Worker, allocates SharedArrayBuffer, and provides read access to the front buffer.",
+    "target_file": "src/workers/computeBridge.ts",
+    "exact_instructions": "Add WorkerBridge class implementing IComputeBridge. In init(): create SharedArrayBuffer via createSharedBuffers(), spawn worker via new Worker(new URL(./computeWorker.ts, import.meta.url), {type: module}), send init message with sab. In step(): write deltaTime to deltaTimeView, post step message. Read methods: load buffer index from signalView, read from front buffer at correct offsets. destroy(): terminate worker.",
+    "code_snippet": "class WorkerBridge implements IComputeBridge {\n  private worker: Worker | null = null;\n  private views: SharedBufferViews | null = null;\n\n  async init(courtCount: number, robotCount: number): Promise<void> {\n    this.views = createSharedBuffers(courtCount, robotCount);\n    this.worker = new Worker(\n      new URL('./computeWorker.ts', import.meta.url),\n      { type: 'module' }\n    );\n    // Send SAB to worker and wait for ready\n  }\n\n  step(deltaTime: number): void {\n    if (!this.views || !this.worker) return;\n    this.views.deltaTimeView[0] = deltaTime;\n    this.worker.postMessage({ type: 'step' });\n  }\n}",
+    "confidence_score": 9.1,
+    "status": "pending"
+  },
+  {
+    "iteration_id": 14,
+    "parent_step_id": 189,
+    "resolution": "L2",
+    "sequence_number": 3,
+    "title": "Add read methods to WorkerBridge class",
+    "description": "Implement the read methods that extract entity state from the SharedArrayBuffer front buffer.",
+    "target_file": "src/workers/computeBridge.ts",
+    "exact_instructions": "Add readBallState, readPlayerState, readRobotState, readGameState methods to WorkerBridge. Each loads the current buffer index from signalView, selects the front buffer, and reads at the correct offset.",
+    "code_snippet": "readBallState(courtIndex: number): BallReadout {\n  const v = this.getFrontBuffer();\n  const o = getBallOffset(courtIndex);\n  return { px:v[o], py:v[o+1], pz:v[o+2], vx:v[o+3], vy:v[o+4], vz:v[o+5], visible:v[o+6] };\n}\nprivate getFrontBuffer(): Float32Array {\n  const idx = Atomics.load(this.views.signalView, HEADER_BUFFER_INDEX_OFFSET);\n  return idx === 0 ? this.views.dataViewA : this.views.dataViewB;\n}",
+    "confidence_score": 9.2,
+    "status": "pending"
+  },
+  {
+    "iteration_id": 14,
+    "parent_step_id": 189,
+    "resolution": "L2",
+    "sequence_number": 4,
+    "title": "Add feature detection and factory function to computeBridge.ts",
+    "description": "Add supportsWorkerCompute() feature detection and createComputeBridge() factory.",
+    "target_file": "src/workers/computeBridge.ts",
+    "exact_instructions": "Add function supportsWorkerCompute() that checks SharedArrayBuffer, Atomics, crossOriginIsolated. Add createComputeBridge() that returns WorkerBridge if supported, FallbackBridge otherwise.",
+    "code_snippet": "export function supportsWorkerCompute(): boolean {\n  return typeof SharedArrayBuffer !== 'undefined' && typeof Atomics !== 'undefined';\n}\nexport function createComputeBridge(): IComputeBridge {\n  return supportsWorkerCompute() ? new WorkerBridge() : new FallbackBridge();\n}",
+    "confidence_score": 9.5,
+    "status": "pending"
+  }
+]

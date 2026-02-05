@@ -1,0 +1,123 @@
+[
+  {
+    "iteration_id": 9,
+    "parent_step_id": 146,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-3.1.1: Set per-instance surface colors from surfaceType",
+    "description": "In a useEffect keyed on [surfaceType, courtPositions.length], convert SURFACE_MATERIALS[surfaceType].color to THREE.Color, then call surfaceRef.current.setColorAt(i, color) for each court. Mark instanceColor.needsUpdate = true.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "useEffect(() => {\n  if (!surfaceRef.current) return;\n  const col = tempColor.current.set(SURFACE_MATERIALS[surfaceType].color);\n  for (let i = 0; i < courtPositions.length; i++) {\n    surfaceRef.current.setColorAt(i, col);\n  }\n  if (surfaceRef.current.instanceColor) surfaceRef.current.instanceColor.needsUpdate = true;\n}, [surfaceType, courtPositions.length]);\n\nNote: setColorAt auto-creates instanceColor InstancedBufferAttribute on first call.",
+    "confidence_score": 0.95
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 147,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-3.2.1: Set per-instance status ring colors from court state",
+    "description": "In a useEffect keyed on [courts, courtPositions], loop through courtPositions, get courtState from courts Map, convert getStatusColor(status) to THREE.Color, call statusRingRef.current.setColorAt(i, color). Mark needsUpdate.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "useEffect(() => {\n  if (!statusRingRef.current) return;\n  const col = tempColor.current;\n  courtPositions.forEach((pos, i) => {\n    const courtState = courts.get(pos.id);\n    if (courtState) {\n      col.set(getStatusColor(courtState.status));\n      statusRingRef.current!.setColorAt(i, col);\n    }\n  });\n  if (statusRingRef.current.instanceColor) statusRingRef.current.instanceColor.needsUpdate = true;\n}, [courts, courtPositions]);",
+    "confidence_score": 0.9
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 148,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-3.3.1: Set dirty overlay visibility via scale-to-zero matrices",
+    "description": "In a useEffect keyed on [courts, courtPositions], for each court: if cleanliness >= 100, set dirtyOverlay matrix scale to (0,0,0). Otherwise set scale to (1,1,1) at the court's overlay position. This hides/shows per-instance.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "useEffect(() => {\n  if (!dirtyOverlayRef.current) return;\n  const mat = tempMatrix.current;\n  const rotX = rotXMatrix.current;\n  const zeroScale = new THREE.Matrix4().makeScale(0, 0, 0);\n  courtPositions.forEach((pos, i) => {\n    const courtState = courts.get(pos.id);\n    if (!courtState || courtState.cleanliness >= 100) {\n      dirtyOverlayRef.current!.setMatrixAt(i, zeroScale);\n    } else {\n      mat.makeTranslation(pos.x, 0.03, pos.z).multiply(rotX);\n      dirtyOverlayRef.current!.setMatrixAt(i, mat);\n    }\n  });\n  dirtyOverlayRef.current.instanceMatrix.needsUpdate = true;\n}, [courts, courtPositions]);\n\nNote: For more granular dirty levels, could also vary the color intensity per instance via setColorAt.",
+    "confidence_score": 0.85
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 149,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-3.4.1: Set selection outline visibility via scale-to-zero matrices",
+    "description": "In a useEffect keyed on [selectedCourtIds, hoveredIndex, courtPositions], for each court: if selected or hovered, set selection outline matrix to full scale at (x, -0.02, z). Otherwise set scale to (0,0,0). Use different material colors for selected vs hovered.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "useEffect(() => {\n  if (!selectionRef.current) return;\n  const mat = tempMatrix.current;\n  const zeroScale = new THREE.Matrix4().makeScale(0, 0, 0);\n  const col = tempColor.current;\n  courtPositions.forEach((pos, i) => {\n    const isSelected = selectedCourtIds.has(pos.id);\n    const isHovered = i === hoveredIndex;\n    if (isSelected || isHovered) {\n      mat.makeTranslation(pos.x, -0.02, pos.z);\n      selectionRef.current!.setMatrixAt(i, mat);\n      col.set(isSelected ? '#60a5fa' : '#a5b4fc');\n      selectionRef.current!.setColorAt(i, col);\n    } else {\n      selectionRef.current!.setMatrixAt(i, zeroScale);\n    }\n  });\n  selectionRef.current.instanceMatrix.needsUpdate = true;\n  if (selectionRef.current.instanceColor) selectionRef.current.instanceColor.needsUpdate = true;\n}, [selectedCourtIds, hoveredIndex, courtPositions]);",
+    "confidence_score": 0.9
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 150,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-4.1.1: Render invisible click targets per court",
+    "description": "In JSX, render courtPositions.map() with invisible mesh click targets. Each mesh has onClick, onPointerOver, onPointerOut handlers. Use useCallback for the handlers to avoid re-creating closures.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "Add local state: const [hoveredIndex, setHoveredIndex] = useState<number>(-1);\n\nIn JSX return:\n{courtPositions.map((pos, i) => (\n  <mesh\n    key={pos.id}\n    position={[pos.x, 0, pos.z]}\n    visible={false}\n    geometry={overlayGeometries.clickTarget}\n    material={courtMaterials.clickTarget}\n    onClick={(e: ThreeEvent<MouseEvent>) => {\n      e.stopPropagation();\n      onSelect(pos.id, e.shiftKey || e.ctrlKey || e.metaKey);\n    }}\n    onPointerOver={(e: ThreeEvent<PointerEvent>) => {\n      e.stopPropagation();\n      setHoveredIndex(i);\n      document.body.style.cursor = 'pointer';\n    }}\n    onPointerOut={() => {\n      setHoveredIndex(-1);\n      document.body.style.cursor = 'auto';\n    }}\n  />\n))}",
+    "confidence_score": 0.95
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 151,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-4.2.1: Update status ring opacity for hover/selection",
+    "description": "When hoveredIndex or selectedCourtIds changes, update status ring opacity. Hovered/selected courts get brighter ring (opacity 0.8 vs 0.3). Since MeshBasicMaterial opacity is shared, use per-instance color brightness as proxy.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "In the status ring color useEffect (L2-3.2.1), also factor in hover/selection brightness. When a court is hovered or selected, multiply the status color by 1.5 (brighten). When not, keep at base level. This approximates the opacity 0.8 vs 0.3 difference from SelectableCourt.tsx.\n\nAlternative: Use two separate InstancedMesh layers for status rings - one at opacity 0.3 for all, one at opacity 0.8 for hovered/selected only. But the color brightness approach is simpler.",
+    "confidence_score": 0.8
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 152,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-5.1.1: Import InstancedCourts in HomebaseCanvas",
+    "description": "Add import for InstancedCourts component. Remove SelectableCourt import (no longer used directly).",
+    "target_file": "src/components/three/HomebaseCanvas.tsx",
+    "exact_instructions": "Replace:\nimport { SelectableCourt } from './SelectableCourt';\nWith:\nimport { InstancedCourts } from './InstancedCourts';",
+    "confidence_score": 0.98
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 152,
+    "resolution": "L2",
+    "sequence_number": 2,
+    "title": "L2-5.1.2: Replace court map loop with InstancedCourts component",
+    "description": "Replace the courtPositions.map() block (lines 169-196) that creates SelectableCourt with a single <InstancedCourts> component plus a separate lightweight map for labels and game sessions.",
+    "target_file": "src/components/three/HomebaseCanvas.tsx",
+    "exact_instructions": "Replace lines 168-196 with:\n{/* Instanced court rendering */}\n<InstancedCourts\n  courtPositions={courtPositions}\n  courts={courts}\n  selectedCourtIds={selectedCourtIds}\n  surfaceType={surfaceType}\n  showNet={showNet}\n  showLines={showLines}\n  onSelect={handleCourtSelect}\n/>\n\n{/* Per-court labels and game sessions (lightweight, non-instanced) */}\n{courtPositions.map(({ x, z, id }) => {\n  const courtState = courts.get(id);\n  if (!courtState) return null;\n  return (\n    <group key={id}>\n      <CourtStatusLabel courtState={courtState} position={{ x, z }} />\n      {activeBookingsByCourtId.has(id) && (\n        <GameSession courtId={id} courtPosition={{ x, z }} isActive={true} />\n      )}\n    </group>\n  );\n})}",
+    "confidence_score": 0.95
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 153,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-5.2.1: Verify CourtStatusLabel and GameSession remain functional",
+    "description": "Ensure CourtStatusLabel (HTML overlay) and GameSession (active game rendering) still work correctly as per-court children. No changes needed to these components.",
+    "target_file": "src/components/three/HomebaseCanvas.tsx",
+    "exact_instructions": "No code changes. Verify that CourtStatusLabel and GameSession props are unchanged. Both receive { x, z } position and courtState/courtId respectively, which are still available from courtPositions map.",
+    "confidence_score": 0.98
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 154,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-6.1.1: Verify matrix computation is memoized by courtPositions",
+    "description": "The matrix computation useEffect already uses [courtPositions] as dependency. Verify that courtPositions itself is memoized in HomebaseCanvas (it already uses useMemo). No additional work needed.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "Verify: In HomebaseCanvas.tsx line 50, courtPositions is already wrapped in useMemo with [config, spacing] deps. In InstancedCourts.tsx, the matrix useEffect depends on [courtPositions]. Since courtPositions has referential stability (useMemo), the useEffect only re-runs when layout actually changes. No code change needed - just verification.",
+    "confidence_score": 0.95
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 155,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-6.2.1: Verify attribute updates only fire on state change",
+    "description": "All attribute useEffects depend on [courts, ...] or [selectedCourtIds, ...]. Zustand creates new references on state change. Verify no per-frame updates exist. No useFrame hooks in InstancedCourts.",
+    "target_file": "src/components/three/InstancedCourts.tsx",
+    "exact_instructions": "Code review checklist:\n1. No useFrame hooks in InstancedCourts component\n2. All useEffects have proper dependency arrays\n3. needsUpdate = true is only set inside useEffects (not in render body)\n4. courtPositions comes from useMemo in parent\n5. courts and selectedCourtIds come from Zustand (referentially stable until mutation)",
+    "confidence_score": 0.95
+  }
+]

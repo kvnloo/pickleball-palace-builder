@@ -1,0 +1,122 @@
+[
+  {
+    "step_id": 186,
+    "test_type": "unit",
+    "description": "SharedArrayBuffer layout calculates correct total size for 100 courts + 10 robots",
+    "assertion": "calculateBufferSize(100, 10) returns HEADER_TOTAL_BYTES + 2 * (100*51 + 10*6) * 4 = 24 + 2*5160*4 = 41304",
+    "target_metric": "buffer_size_bytes",
+    "target_value": 41304,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 186,
+    "test_type": "unit",
+    "description": "Entity offset helpers return non-overlapping ranges",
+    "assertion": "getBallOffset(0) < getPlayerOffset(0,0) < getGameStateOffset(0) < getBallOffset(1) for sequential courts",
+    "target_metric": "offset_correctness",
+    "target_value": 1,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 186,
+    "test_type": "unit",
+    "description": "createSharedBuffers returns valid typed array views over the SharedArrayBuffer",
+    "assertion": "signalView, deltaTimeView, dataViewA, dataViewB are all views of the same underlying SAB with non-overlapping byte ranges",
+    "target_metric": "view_validity",
+    "target_value": 1,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 190,
+    "test_type": "unit",
+    "description": "Double-buffer swap is atomic - buffer index transitions cleanly from 0 to 1",
+    "assertion": "After Atomics.store(signalView, BUFFER_INDEX_OFFSET, 1), Atomics.load returns 1 immediately",
+    "target_metric": "swap_atomicity",
+    "target_value": 1,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 190,
+    "test_type": "unit",
+    "description": "Double-buffer ensures read buffer is consistent while write buffer is being modified",
+    "assertion": "Writing to back buffer does not affect values read from front buffer",
+    "target_metric": "buffer_isolation",
+    "target_value": 1,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 187,
+    "test_type": "unit",
+    "description": "stepBallPhysics applies gravity correctly to ball velocity",
+    "assertion": "After stepBallPhysics with dt=1/60, vy decreases by GRAVITY/60 = -0.1635",
+    "target_metric": "gravity_accuracy",
+    "target_value": 0.001,
+    "target_comparison": "lt",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 187,
+    "test_type": "unit",
+    "description": "stepBallPhysics handles ground bounce with damping",
+    "assertion": "When ball y <= BALL_RADIUS, velocity y is negated and multiplied by BOUNCE_DAMPING",
+    "target_metric": "bounce_correctness",
+    "target_value": 1,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 187,
+    "test_type": "unit",
+    "description": "stepPlayerMovement moves player towards target at correct speed",
+    "assertion": "After stepPlayerMovement with dt=1/60, player position is closer to target by speed*dt = 3/60 = 0.05m",
+    "target_metric": "movement_accuracy",
+    "target_value": 0.001,
+    "target_comparison": "lt",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 192,
+    "test_type": "unit",
+    "description": "FallbackBridge works without SharedArrayBuffer",
+    "assertion": "FallbackBridge initializes, steps, and returns valid ball/player state using regular ArrayBuffer",
+    "target_metric": "fallback_functional",
+    "target_value": 1,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 192,
+    "test_type": "unit",
+    "description": "Feature detection correctly identifies SAB unavailability",
+    "assertion": "supportsWorkerCompute() returns false when SharedArrayBuffer is undefined",
+    "target_metric": "detection_correctness",
+    "target_value": 1,
+    "target_comparison": "eq",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 187,
+    "test_type": "benchmark",
+    "description": "Physics engine processes 100 balls in under 0.5ms",
+    "assertion": "stepBallPhysics called 100 times completes in under 0.5ms",
+    "target_metric": "physics_100_balls_ms",
+    "target_value": 0.5,
+    "target_comparison": "lt",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  },
+  {
+    "step_id": 187,
+    "test_type": "benchmark",
+    "description": "Player AI processes 400 players (100 courts x 4) in under 1ms",
+    "assertion": "stepPlayerMovement called 400 times completes in under 1ms",
+    "target_metric": "ai_400_players_ms",
+    "target_value": 1.0,
+    "target_comparison": "lt",
+    "code_location": "src/__tests__/webWorkerCompute.perf.test.ts"
+  }
+]

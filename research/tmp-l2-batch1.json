@@ -1,0 +1,68 @@
+[
+  {
+    "iteration_id": 9,
+    "parent_step_id": 139,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-1.1.1: Create courtGeometries.ts with imports and constants",
+    "description": "Create new file src/components/three/courtGeometries.ts. Import THREE, mergeGeometries from three/addons, and all court constants from types/facility. Compute derived constants (halfWidth, halfLength, centerlineLength).",
+    "target_file": "src/components/three/courtGeometries.ts",
+    "exact_instructions": "Create file with:\nimport * as THREE from 'three';\nimport { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';\nimport { COURT_WIDTH, COURT_LENGTH, KITCHEN_DEPTH, LINE_WIDTH, LINE_HEIGHT, NET_HEIGHT_SIDES, NET_HEIGHT_CENTER } from '@/types/facility';\n\nconst halfWidth = COURT_WIDTH / 2;\nconst halfLength = COURT_LENGTH / 2;\nconst centerlineLength = halfLength - KITCHEN_DEPTH;",
+    "confidence_score": 0.98
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 139,
+    "resolution": "L2",
+    "sequence_number": 2,
+    "title": "L2-1.1.2: Create base geometry singletons",
+    "description": "Define module-level shared base geometries identical to current PickleballCourt.tsx. These are the unpositioned base shapes.",
+    "target_file": "src/components/three/courtGeometries.ts",
+    "exact_instructions": "Add base geometries as module-level constants. courtSurfaceGeometry and postGeometry are exported (used directly by InstancedMesh). Line geometries remain unexported (only used to create the merged geometry).",
+    "confidence_score": 0.98
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 139,
+    "resolution": "L2",
+    "sequence_number": 3,
+    "title": "L2-1.1.3: Clone and translate 8 line geometries",
+    "description": "Clone each base line geometry and apply translate() for court-relative positioning. Must match the exact positions from PickleballCourt.tsx lines 97-151.",
+    "target_file": "src/components/three/courtGeometries.ts",
+    "exact_instructions": "Clone each geometry and translate to match the position props from PickleballCourt.tsx:\nleftSideline: translate(-halfWidth + LINE_WIDTH/2, LINE_HEIGHT/2, 0)\nrightSideline: translate(halfWidth - LINE_WIDTH/2, LINE_HEIGHT/2, 0)\nfrontBaseline: translate(0, LINE_HEIGHT/2, -halfLength + LINE_WIDTH/2)\nbackBaseline: translate(0, LINE_HEIGHT/2, halfLength - LINE_WIDTH/2)\nfrontNVZ: translate(0, LINE_HEIGHT/2, -KITCHEN_DEPTH)\nbackNVZ: translate(0, LINE_HEIGHT/2, KITCHEN_DEPTH)\nfrontCenterline: translate(0, LINE_HEIGHT/2, -KITCHEN_DEPTH - centerlineLength/2)\nbackCenterline: translate(0, LINE_HEIGHT/2, KITCHEN_DEPTH + centerlineLength/2)",
+    "confidence_score": 0.95
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 140,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-1.2.1: Merge all line geometries into single BufferGeometry",
+    "description": "Call mergeGeometries with all 8 positioned line clones. Export the result as mergedLineGeometry.",
+    "target_file": "src/components/three/courtGeometries.ts",
+    "exact_instructions": "export const mergedLineGeometry = mergeGeometries([leftSideline, rightSideline, frontBaseline, backBaseline, frontNVZ, backNVZ, frontCenterline, backCenterline]);\nNote: mergeGeometries returns BufferGeometry or null. Add non-null assertion since inputs are valid.",
+    "confidence_score": 0.95
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 141,
+    "resolution": "L2",
+    "sequence_number": 1,
+    "title": "L2-1.3.1: Create net geometry with sag (copy from PickleballCourt)",
+    "description": "Move the createNetGeometry function from PickleballCourt.tsx to courtGeometries.ts. Export the resulting netGeometry singleton.",
+    "target_file": "src/components/three/courtGeometries.ts",
+    "exact_instructions": "Copy createNetGeometry() function (lines 46-67 of PickleballCourt.tsx) verbatim. Export: export const netGeometry = createNetGeometry();",
+    "confidence_score": 0.98
+  },
+  {
+    "iteration_id": 9,
+    "parent_step_id": 141,
+    "resolution": "L2",
+    "sequence_number": 2,
+    "title": "L2-1.3.2: Export shared materials and overlay geometries",
+    "description": "Export all shared materials (line, net, post, selected, hovered, dirtyOverlay, statusRing, clickTarget) and overlay geometries (outline, overlay, clickTarget, statusRing). Also export POST_OFFSET_X and NET_Y constants for InstancedCourts matrix computation.",
+    "target_file": "src/components/three/courtGeometries.ts",
+    "exact_instructions": "Export courtMaterials object with all materials matching current PickleballCourt and SelectableCourt materials. Export overlayGeometries with outline/overlay/clickTarget/statusRing geometries. Export POST_OFFSET_X = halfWidth + 0.05 and NET_Y = NET_HEIGHT_SIDES / 2.",
+    "confidence_score": 0.95
+  }
+]
