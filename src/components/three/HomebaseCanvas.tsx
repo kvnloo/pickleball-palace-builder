@@ -1,20 +1,35 @@
 import { useMemo, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { SelectableCourt } from './SelectableCourt';
 import { CourtStatusLabel } from './CourtStatusLabel';
 import { CleaningRobotCC1 } from './CleaningRobotCC1';
-import { PlayerGroup } from './Player';
 import { RobotDock } from './RobotDock';
+import { GameSession } from './GameSession';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { useFacilityStore } from '@/stores/facilityStore';
+import { usePerformanceStore } from '@/stores/performanceStore';
 import { useSimulation } from '@/hooks/useSimulation';
 import { useRobotController } from '@/hooks/useRobotController';
 import { COURT_WIDTH, COURT_LENGTH, Booking } from '@/types/facility';
 
+// Performance tracking component
+function PerformanceTracker() {
+  const recordFrame = usePerformanceStore(state => state.recordFrame);
+  
+  useFrame((_, delta) => {
+    // Record frame time in milliseconds
+    recordFrame(delta * 1000);
+  });
+  
+  return null;
+}
+
 function HomebaseScene() {
   const { config, surfaceType, spacing, showNet, showLines } = useFacilityStore();
+  const { tier, config: perfConfig } = usePerformanceStore();
   const { 
     courts, 
     bookings, 
@@ -108,19 +123,26 @@ function HomebaseScene() {
     <>
       {/* Lighting */}
       <ambientLight intensity={0.5} />
-      <directionalLight
-        position={[50, 100, 50]}
-        intensity={1}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={200}
-        shadow-camera-left={-50}
-        shadow-camera-right={50}
-        shadow-camera-top={50}
-        shadow-camera-bottom={-50}
-      />
+      {perfConfig.shadows ? (
+        <directionalLight
+          position={[50, 100, 50]}
+          intensity={1}
+          castShadow
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+          shadow-camera-far={200}
+          shadow-camera-left={-50}
+          shadow-camera-right={50}
+          shadow-camera-top={50}
+          shadow-camera-bottom={-50}
+        />
+      ) : (
+        <directionalLight position={[50, 100, 50]} intensity={1} />
+      )}
       <directionalLight position={[-30, 50, -30]} intensity={0.3} />
+      
+      {/* Performance tracker */}
+      <PerformanceTracker />
 
       {/* Controls */}
       <OrbitControls
@@ -161,13 +183,12 @@ function HomebaseScene() {
             />
             <CourtStatusLabel courtState={courtState} position={{ x, z }} />
             
-            {/* Players on active courts */}
+            {/* Game session for active courts */}
             {activeBookingsByCourtId.has(id) && (
-              <PlayerGroup
-                playerCount={activeBookingsByCourtId.get(id)!.playerCount}
+              <GameSession
+                courtId={id}
                 courtPosition={{ x, z }}
-                courtWidth={COURT_WIDTH}
-                courtLength={COURT_LENGTH}
+                isActive={true}
               />
             )}
           </group>
@@ -190,6 +211,7 @@ function HomebaseScene() {
 
 export function HomebaseCanvas() {
   const { config, spacing } = useFacilityStore();
+  const { config: perfConfig } = usePerformanceStore();
   
   // Calculate initial camera position
   const initialCameraPosition = useMemo(() => {
@@ -210,7 +232,12 @@ export function HomebaseCanvas() {
   return (
     <div className="w-full h-full bg-muted">
       <Canvas
-        shadows
+        shadows={perfConfig.shadows}
+        dpr={perfConfig.pixelRatio}
+        gl={{ 
+          antialias: perfConfig.antialiasing,
+          powerPreference: 'high-performance',
+        }}
         camera={{
           fov: 50,
           near: 0.1,

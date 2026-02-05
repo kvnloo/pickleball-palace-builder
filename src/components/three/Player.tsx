@@ -1,5 +1,4 @@
-import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useMemo } from 'react';
 import * as THREE from 'three';
 
 interface PlayerProps {
@@ -21,38 +20,25 @@ const paddleGeometry = new THREE.BoxGeometry(0.2, 0.02, 0.15);
 // Paddle material
 const paddleMaterial = new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.5 });
 
-const playerColors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b'];
+// Pre-created player materials
+const playerMaterials = [
+  new THREE.MeshStandardMaterial({ color: '#3b82f6', roughness: 0.6 }),
+  new THREE.MeshStandardMaterial({ color: '#ef4444', roughness: 0.6 }),
+  new THREE.MeshStandardMaterial({ color: '#22c55e', roughness: 0.6 }),
+  new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.6 }),
+];
 
 export function Player({ position, color, index }: PlayerProps) {
-  const groupRef = useRef<THREE.Group>(null);
-  const paddleRef = useRef<THREE.Mesh>(null);
-  const animationOffset = useMemo(() => Math.random() * Math.PI * 2, []);
-
-  const playerColor = color || playerColors[index % playerColors.length];
-  const playerMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: playerColor, roughness: 0.6 }),
-    [playerColor]
+  // Use pre-created material or create custom one if color provided
+  const playerMaterial = useMemo(() => 
+    color 
+      ? new THREE.MeshStandardMaterial({ color, roughness: 0.6 })
+      : playerMaterials[index % playerMaterials.length],
+    [color, index]
   );
 
-  // Idle animation
-  useFrame((state) => {
-    if (groupRef.current) {
-      const time = state.clock.elapsedTime + animationOffset;
-      
-      // Subtle body sway
-      groupRef.current.rotation.y = Math.sin(time * 0.5) * 0.1;
-      groupRef.current.position.y = Math.sin(time * 2) * 0.02;
-      
-      // Paddle swing animation
-      if (paddleRef.current) {
-        paddleRef.current.rotation.x = Math.sin(time * 3) * 0.3;
-        paddleRef.current.rotation.z = Math.cos(time * 2) * 0.2;
-      }
-    }
-  });
-
   return (
-    <group ref={groupRef} position={[position.x, 0, position.z]}>
+    <group position={[position.x, 0, position.z]}>
       {/* Body */}
       <mesh
         geometry={bodyGeometry}
@@ -71,7 +57,7 @@ export function Player({ position, color, index }: PlayerProps) {
 
       {/* Paddle arm */}
       <group position={[PLAYER_RADIUS + 0.1, PLAYER_HEIGHT * 0.6, 0]}>
-        <mesh ref={paddleRef} geometry={paddleGeometry} material={paddleMaterial} position={[0.15, 0, 0]} />
+        <mesh geometry={paddleGeometry} material={paddleMaterial} position={[0.15, 0, 0]} />
       </group>
     </group>
   );

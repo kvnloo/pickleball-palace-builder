@@ -3,6 +3,7 @@ import { ControlPanel } from '@/components/controls/ControlPanel';
 import { FacilityCanvas } from '@/components/three/FacilityCanvas';
 import { HomebasePanel } from '@/components/homebase/HomebasePanel';
 import { HomebaseCanvas } from '@/components/three/HomebaseCanvas';
+import { FPSCounter } from '@/components/ui/FPSCounter';
 import { useFacilityStore } from '@/stores/facilityStore';
 
 const Index = () => {
@@ -23,6 +24,9 @@ const Index = () => {
           {mode === 'build' ? <FacilityCanvas /> : <HomebaseCanvas />}
         </div>
       </div>
+      
+      {/* FPS Counter overlay - only in homebase mode */}
+      {mode === 'homebase' && <FPSCounter />}
     </div>
   );
 };
