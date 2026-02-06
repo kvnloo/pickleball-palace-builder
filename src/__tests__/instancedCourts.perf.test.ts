@@ -396,15 +396,26 @@ describe('6. Merged geometry correctness', () => {
 
 // ---------------------------------------------------------------------------
 // 7. InstancedMesh frustumCulled configuration
-//    Ensures instances are not prematurely culled
+//    Ensures instances have proper bounding boxes for frustum culling
 // ---------------------------------------------------------------------------
 describe('7. InstancedMesh frustumCulled configuration', () => {
-  it('InstancedMesh objects have frustumCulled={false} to prevent incorrect culling', () => {
+  it('InstancedMesh uses computed bounding boxes for proper frustum culling', () => {
     const source = readSource('src/components/three/InstancedCourts.tsx');
-    const instancedMeshCount = (source.match(/<instancedMesh/g) || []).length;
+
+    // Should have bounding box computation
+    expect(source).toContain('boundingBox');
+    expect(source).toContain('boundingSphere');
+
+    // Should have applyBounds function to set geometry bounds
+    expect(source).toContain('applyBounds');
+
+    // Should compute bounds from court positions
+    expect(source).toContain('box.expandByPoint');
+    expect(source).toContain('getBoundingSphere');
+
+    // Should NOT have frustumCulled={false} anymore (use proper bounds instead)
     const frustumCulledFalseCount = (source.match(/frustumCulled\s*=\s*\{?\s*false/g) || []).length;
-    // Every instancedMesh should have frustumCulled={false}
-    expect(frustumCulledFalseCount).toBeGreaterThanOrEqual(instancedMeshCount);
+    expect(frustumCulledFalseCount).toBe(0);
   });
 });
 

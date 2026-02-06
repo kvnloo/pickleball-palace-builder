@@ -24,9 +24,14 @@ import {
 import {
   SurfaceType,
   SURFACE_MATERIALS,
+  COURT_WIDTH,
+  COURT_LENGTH,
   getStatusColor,
 } from '@/types/facility';
 import { useSimulationStore } from '@/stores/simulationStore';
+
+// Maximum height of court elements (net, posts)
+const COURT_MAX_HEIGHT = 3.0;
 
 interface CourtPosition {
   x: number;
@@ -91,6 +96,41 @@ export function InstancedCourts({
   const surfaceColor = useMemo(() => {
     return new THREE.Color(SURFACE_MATERIALS[surfaceType].color);
   }, [surfaceType]);
+
+  // Compute aggregate bounding box for all instances (for frustum culling)
+  const boundingBox = useMemo(() => {
+    if (courtPositions.length === 0) return null;
+    const box = new THREE.Box3();
+    const margin = 2.0; // Extra margin to prevent pop-in
+    courtPositions.forEach(({ x, z }) => {
+      box.expandByPoint(new THREE.Vector3(
+        x - COURT_WIDTH / 2 - margin,
+        -0.1,
+        z - COURT_LENGTH / 2 - margin
+      ));
+      box.expandByPoint(new THREE.Vector3(
+        x + COURT_WIDTH / 2 + margin,
+        COURT_MAX_HEIGHT,
+        z + COURT_LENGTH / 2 + margin
+      ));
+    });
+    return box;
+  }, [courtPositions]);
+
+  // Compute bounding sphere from bounding box
+  const boundingSphere = useMemo(() => {
+    if (!boundingBox) return null;
+    const sphere = new THREE.Sphere();
+    boundingBox.getBoundingSphere(sphere);
+    return sphere;
+  }, [boundingBox]);
+
+  // Apply bounding box/sphere to an InstancedMesh for proper frustum culling
+  const applyBounds = useCallback((mesh: THREE.InstancedMesh | null) => {
+    if (!mesh || !boundingBox || !boundingSphere) return;
+    mesh.geometry.boundingBox = boundingBox.clone();
+    mesh.geometry.boundingSphere = boundingSphere.clone();
+  }, [boundingBox, boundingSphere]);
 
   // Create index map for court ID to instance index
   const courtIndexMap = useMemo(() => {
@@ -170,7 +210,15 @@ export function InstancedCourts({
     if (leftPostRef.current) leftPostRef.current.instanceMatrix.needsUpdate = true;
     if (rightPostRef.current) rightPostRef.current.instanceMatrix.needsUpdate = true;
     if (clickTargetRef.current) clickTargetRef.current.instanceMatrix.needsUpdate = true;
-  }, [courtPositions, count, surfaceColor, showNet, showLines]);
+
+    // Apply bounding boxes for frustum culling
+    applyBounds(surfaceRef.current);
+    applyBounds(linesRef.current);
+    applyBounds(netRef.current);
+    applyBounds(leftPostRef.current);
+    applyBounds(rightPostRef.current);
+    applyBounds(clickTargetRef.current);
+  }, [courtPositions, count, surfaceColor, showNet, showLines, applyBounds]);
 
   // Update selection outlines, dirty overlays, and status rings via useEffect subscription
   // Matrix updates are inside useEffect (not render body)
@@ -245,6 +293,11 @@ export function InstancedCourts({
     // Run once initially
     updateInstanceMatrices();
 
+    // Apply bounding boxes for overlay meshes
+    applyBounds(selectionRef.current);
+    applyBounds(dirtyOverlayRef.current);
+    applyBounds(statusRingRef.current);
+
     // Subscribe to store changes
     const unsubscribe = useSimulationStore.subscribe(
       (state) => ({ courts: state.courts, selectedCourtIds: state.selectedCourtIds }),
@@ -253,7 +306,7 @@ export function InstancedCourts({
     );
 
     return () => unsubscribe();
-  }, [courtPositions, count]);
+  }, [courtPositions, count, applyBounds]);
 
   // Handle click on court
   const handleClick = useCallback(
@@ -290,65 +343,56 @@ export function InstancedCourts({
       <instancedMesh
         ref={surfaceRef}
         args={[surfaceGeometry, surfaceMaterial, count]}
-        frustumCulled={false}
-        receiveShadow
+                receiveShadow
       />
 
       {/* Court lines (merged) */}
       <instancedMesh
         ref={linesRef}
         args={[mergedLineGeometry, lineMaterial, count]}
-        frustumCulled={false}
-      />
+              />
 
       {/* Nets */}
       <instancedMesh
         ref={netRef}
         args={[netGeometry, netMaterial, count]}
-        frustumCulled={false}
-      />
+              />
 
       {/* Left posts */}
       <instancedMesh
         ref={leftPostRef}
         args={[postGeometry, postMaterial, count]}
-        frustumCulled={false}
-      />
+              />
 
       {/* Right posts */}
       <instancedMesh
         ref={rightPostRef}
         args={[postGeometry, postMaterial, count]}
-        frustumCulled={false}
-      />
+              />
 
       {/* Selection outlines */}
       <instancedMesh
         ref={selectionRef}
         args={[selectionOutlineGeometry, selectionOutlineMaterial, count]}
-        frustumCulled={false}
-      />
+              />
 
       {/* Dirty overlays */}
       <instancedMesh
         ref={dirtyOverlayRef}
         args={[dirtyOverlayGeometry, dirtyOverlayMaterial, count]}
-        frustumCulled={false}
-      />
+              />
 
       {/* Status rings */}
       <instancedMesh
         ref={statusRingRef}
         args={[statusRingGeometry, statusRingMaterial, count]}
-        frustumCulled={false}
-      />
+              />
 
       {/* Click targets (invisible) */}
       <instancedMesh
         ref={clickTargetRef}
         args={[clickTargetGeometry, clickTargetMaterial, count]}
-        frustumCulled={false}
-        visible={false}
+                visible={false}
         onClick={handleClick}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
