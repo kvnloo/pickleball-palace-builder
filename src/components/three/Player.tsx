@@ -18,21 +18,21 @@ const headGeometry = new THREE.SphereGeometry(HEAD_RADIUS, 8, 8);
 const paddleGeometry = new THREE.BoxGeometry(0.2, 0.02, 0.15);
 
 // Paddle material
-const paddleMaterial = new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.5 });
+const paddleMaterial = new THREE.MeshLambertMaterial({ color: '#1a1a1a' });
 
 // Pre-created player materials
 const playerMaterials = [
-  new THREE.MeshStandardMaterial({ color: '#3b82f6', roughness: 0.6 }),
-  new THREE.MeshStandardMaterial({ color: '#ef4444', roughness: 0.6 }),
-  new THREE.MeshStandardMaterial({ color: '#22c55e', roughness: 0.6 }),
-  new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.6 }),
+  new THREE.MeshLambertMaterial({ color: '#3b82f6' }),
+  new THREE.MeshLambertMaterial({ color: '#ef4444' }),
+  new THREE.MeshLambertMaterial({ color: '#22c55e' }),
+  new THREE.MeshLambertMaterial({ color: '#f59e0b' }),
 ];
 
 export function Player({ position, color, index }: PlayerProps) {
   // Use pre-created material or create custom one if color provided
-  const playerMaterial = useMemo(() => 
-    color 
-      ? new THREE.MeshStandardMaterial({ color, roughness: 0.6 })
+  const playerMaterial = useMemo(() =>
+    color
+      ? new THREE.MeshLambertMaterial({ color })
       : playerMaterials[index % playerMaterials.length],
     [color, index]
   );

@@ -1,14 +1,19 @@
-import { useEffect, useCallback } from 'react';
-import { useFrame } from '@react-three/fiber';
+/**
+ * useSimulation - Hook for simulation initialization and state access
+ *
+ * NOTE: The simulation tick is now handled by WorldUpdateLoop.
+ * This hook only handles court initialization when config changes
+ * and exposes simulation state for components.
+ */
+import { useEffect } from 'react';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 
 export function useSimulation() {
   const { config } = useFacilityStore();
-  const { 
-    isPlaying, 
-    speed, 
-    tick, 
+  const {
+    isPlaying,
+    speed,
     initializeCourts,
     currentTime,
   } = useSimulationStore();
@@ -23,15 +28,7 @@ export function useSimulation() {
     }
   }, [config, initializeCourts]);
 
-  // Simulation tick driven by useFrame for smooth animation
-  useFrame((_, delta) => {
-    if (!isPlaying) return;
-    
-    // Convert real seconds to simulated minutes
-    // At 1x speed, 1 real second = 1 simulated minute
-    const simulatedMinutes = delta * speed;
-    tick(simulatedMinutes);
-  });
+  // Simulation tick is now driven by WorldUpdateLoop
 
   return {
     currentTime,

@@ -1,5 +1,5 @@
-import { useMemo, useState, useCallback } from 'react';
-import { ThreeEvent } from '@react-three/fiber';
+import { useMemo, useCallback, useRef, memo } from 'react';
+import { ThreeEvent, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { PickleballCourt } from './PickleballCourt';
 import {
@@ -50,16 +50,24 @@ const pooledMaterials = {
 function getStatusRingMaterial(color: string, opacity: number): THREE.MeshBasicMaterial {
   const key = `${color}-${opacity}`;
   if (!pooledMaterials.statusRings.has(key)) {
-    pooledMaterials.statusRings.set(key, new THREE.MeshBasicMaterial({ 
-      color, 
-      transparent: true, 
-      opacity 
+    pooledMaterials.statusRings.set(key, new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity
     }));
   }
   return pooledMaterials.statusRings.get(key)!;
 }
 
-export function SelectableCourt({
+// Custom comparator for React.memo - checks courtState.id, courtState.status, courtState.cleanliness, isSelected, surfaceType, showNet, showLines
+function areSelectableCourtPropsEqual(prev: SelectableCourtProps, next: SelectableCourtProps): boolean {
+  return prev.courtState.id === next.courtState.id && prev.courtState.status === next.courtState.status &&
+    prev.courtState.cleanliness === next.courtState.cleanliness && prev.isSelected === next.isSelected &&
+    prev.surfaceType === next.surfaceType && prev.showNet === next.showNet && prev.showLines === next.showLines &&
+    prev.position.x === next.position.x && prev.position.z === next.position.z;
+}
+
+export const SelectableCourt = memo(function SelectableCourt({
   courtState,
   surfaceType,
   showNet,
@@ -68,7 +76,10 @@ export function SelectableCourt({
   isSelected,
   onSelect,
 }: SelectableCourtProps) {
-  const [isHovered, setIsHovered] = useState(false);
+  // Use refs instead of state for hover - avoids re-render
+  const isHoveredRef = useRef(false);
+  const outlineMeshRef = useRef<THREE.Mesh>(null);
+  const statusRingRef = useRef<THREE.Mesh>(null);
 
   const handleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -77,31 +88,40 @@ export function SelectableCourt({
 
   const handlePointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
-    setIsHovered(true);
+    isHoveredRef.current = true;
     document.body.style.cursor = 'pointer';
   }, []);
 
   const handlePointerOut = useCallback(() => {
-    setIsHovered(false);
+    isHoveredRef.current = false;
     document.body.style.cursor = 'auto';
   }, []);
 
   // Status-based materials
   const statusColor = getStatusColor(courtState.status);
-  
-  // Use pooled materials instead of creating new ones
-  const outlineMaterial = isSelected ? pooledMaterials.selected 
-    : isHovered ? pooledMaterials.hovered 
-    : null;
 
   // Use pooled dirty materials (quantized to 5 levels for performance)
-  const dirtyLevel = courtState.cleanliness >= 100 ? 0 
+  const dirtyLevel = courtState.cleanliness >= 100 ? 0
     : Math.min(5, Math.ceil((100 - courtState.cleanliness) / 20));
   const dirtyOverlayMaterial = pooledMaterials.dirty[dirtyLevel];
-  
-  // Use pooled status ring material
-  const ringOpacity = isHovered || isSelected ? 0.8 : 0.3;
-  const statusRingMaterial = getStatusRingMaterial(statusColor, ringOpacity);
+
+  // Update outline and status ring visibility/material imperatively via useFrame
+  useFrame(() => {
+    if (outlineMeshRef.current) {
+      const showOutline = isSelected || isHoveredRef.current;
+      outlineMeshRef.current.visible = showOutline;
+      if (showOutline) {
+        outlineMeshRef.current.material = isSelected
+          ? pooledMaterials.selected
+          : pooledMaterials.hovered;
+      }
+    }
+
+    if (statusRingRef.current) {
+      const ringOpacity = isHoveredRef.current || isSelected ? 0.8 : 0.3;
+      statusRingRef.current.material = getStatusRingMaterial(statusColor, ringOpacity);
+    }
+  });
 
   return (
     <group position={[position.x, 0, position.z]}>
@@ -129,18 +149,23 @@ export function SelectableCourt({
         />
       )}
 
-      {/* Selection/hover outline */}
-      {outlineMaterial && (
-        <mesh geometry={sharedGeometries.outline} material={outlineMaterial} position={[0, -0.02, 0]} />
-      )}
+      {/* Selection/hover outline - always rendered, visibility controlled via ref */}
+      <mesh
+        ref={outlineMeshRef}
+        geometry={sharedGeometries.outline}
+        material={pooledMaterials.selected}
+        position={[0, -0.02, 0]}
+        visible={isSelected}
+      />
 
-      {/* Status indicator ring */}
-      <mesh 
+      {/* Status indicator ring - always rendered, material controlled via ref */}
+      <mesh
+        ref={statusRingRef}
         geometry={sharedGeometries.statusRing}
-        material={statusRingMaterial}
-        position={[0, 0.01, 0]} 
+        material={getStatusRingMaterial(statusColor, isSelected ? 0.8 : 0.3)}
+        position={[0, 0.01, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
       />
     </group>
   );
-}
+}, areSelectableCourtPropsEqual);

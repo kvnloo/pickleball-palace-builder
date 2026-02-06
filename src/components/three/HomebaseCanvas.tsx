@@ -1,52 +1,87 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, memo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { SelectableCourt } from './SelectableCourt';
+import { InstancedCourts } from './InstancedCourts';
 import { CourtStatusLabel } from './CourtStatusLabel';
 import { CleaningRobotCC1 } from './CleaningRobotCC1';
 import { RobotDock } from './RobotDock';
 import { GameSession } from './GameSession';
+import { WorldUpdateLoop } from '@/systems/WorldUpdateLoop';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { useFacilityStore } from '@/stores/facilityStore';
 import { usePerformanceStore } from '@/stores/performanceStore';
 import { useSimulation } from '@/hooks/useSimulation';
 import { useRobotController } from '@/hooks/useRobotController';
-import { COURT_WIDTH, COURT_LENGTH, Booking } from '@/types/facility';
+import { COURT_WIDTH, COURT_LENGTH } from '@/types/facility';
 
-// Performance tracking component
-function PerformanceTracker() {
-  const recordFrame = usePerformanceStore(state => state.recordFrame);
-  
-  useFrame((_, delta) => {
-    // Record frame time in milliseconds
-    recordFrame(delta * 1000);
-  });
-  
-  return null;
+// CourtGroup component with per-court Zustand subscriptions
+interface CourtGroupProps {
+  courtId: string;
+  position: { x: number; z: number };
+  onCourtSelect: (courtId: string, shiftKey: boolean) => void;
+  surfaceType: string;
+  showNet: boolean;
+  showLines: boolean;
 }
+
+const CourtGroup = memo(function CourtGroup({
+  courtId,
+  position,
+  onCourtSelect,
+  surfaceType,
+  showNet,
+  showLines,
+}: CourtGroupProps) {
+  // Per-court Zustand selector for court state
+  const courtState = useSimulationStore(s => s.courts.get(courtId));
+  // Per-court selector for selection state
+  const isSelected = useSimulationStore(s => s.selectedCourtIds.has(courtId));
+  // Per-court selector for bookings
+  const bookings = useSimulationStore(s => s.bookings);
+
+  // Determine if this court has an active booking
+  const hasActiveBooking = useMemo(() => {
+    if (!courtState || courtState.status !== 'IN_USE') return false;
+    return bookings.some(
+      b => b.courtId === courtId && courtState.activeBookingId === b.id
+    );
+  }, [courtState, courtId, bookings]);
+
+  if (!courtState) return null;
+
+  return (
+    <group>
+      <CourtStatusLabel courtState={courtState} position={position} />
+
+      {/* Game session for active courts */}
+      {hasActiveBooking && (
+        <GameSession
+          courtId={courtId}
+          courtPosition={position}
+          isActive={true}
+        />
+      )}
+    </group>
+  );
+});
 
 function HomebaseScene() {
   const { config, surfaceType, spacing, showNet, showLines } = useFacilityStore();
   const { tier, config: perfConfig } = usePerformanceStore();
-  const { 
-    courts, 
-    bookings, 
-    robots, 
-    selectedCourtIds, 
+  // Do NOT destructure courts, selectedCourtIds, or bookings from store
+  const {
+    robots,
     dockPosition,
-    selectCourt,
-    multiSelectMode,
   } = useSimulationStore();
 
   // Initialize simulation
   useSimulation();
-  
+
   // Robot controller for pathfinding
   const { getRobotRotation } = useRobotController();
 
-  // Calculate court positions
+  // Court layout - useMemo courtPositions for performance
   const courtPositions = useMemo(() => {
     const positions: Array<{ x: number; z: number; id: string; row: number; col: number }> = [];
     const rows = config.rows;
@@ -64,20 +99,11 @@ function HomebaseScene() {
     return positions;
   }, [config, spacing]);
 
-  // Get active bookings for each court
-  const activeBookingsByCourtId = useMemo(() => {
-    const map = new Map<string, Booking>();
-    bookings.forEach((booking) => {
-      const court = courts.get(booking.courtId);
-      if (court && court.status === 'IN_USE' && court.activeBookingId === booking.id) {
-        map.set(booking.courtId, booking);
-      }
-    });
-    return map;
-  }, [bookings, courts]);
-
-  // Handle court selection
+  // Handle court selection - use getState() to avoid reactive dependencies
   const handleCourtSelect = useCallback((courtId: string, isMulti: boolean) => {
+    const state = useSimulationStore.getState();
+    const { selectedCourtIds, multiSelectMode } = state;
+
     if (isMulti || multiSelectMode) {
       const current = selectedCourtIds.has(courtId);
       if (current) {
@@ -89,7 +115,7 @@ function HomebaseScene() {
       useSimulationStore.getState().clearSelection();
       useSimulationStore.getState().selectCourt(courtId);
     }
-  }, [selectedCourtIds, multiSelectMode]);
+  }, []);
 
   // Calculate camera target
   const cameraTarget = useMemo(() => {
@@ -113,8 +139,8 @@ function HomebaseScene() {
 
   // Check if robot is at dock
   const robotAtDock = useMemo(() => {
-    return robots.some(r => 
-      r.status === 'charging' || 
+    return robots.some(r =>
+      r.status === 'charging' ||
       (r.status === 'idle' && Math.abs(r.position.x - dockPosition.x) < 0.5 && Math.abs(r.position.z - dockPosition.z) < 0.5)
     );
   }, [robots, dockPosition]);
@@ -140,9 +166,9 @@ function HomebaseScene() {
         <directionalLight position={[50, 100, 50]} intensity={1} />
       )}
       <directionalLight position={[-30, 50, -30]} intensity={0.3} />
-      
-      {/* Performance tracker */}
-      <PerformanceTracker />
+
+      {/* Consolidated update loop (performance, physics, simulation, robots) */}
+      <WorldUpdateLoop />
 
       {/* Controls */}
       <OrbitControls
@@ -159,41 +185,33 @@ function HomebaseScene() {
         receiveShadow
       >
         <planeGeometry args={[groundSize.width, groundSize.length]} />
-        <meshStandardMaterial color="#1f2937" roughness={0.9} />
+        <meshLambertMaterial color="#1f2937" />
       </mesh>
 
       {/* Robot dock */}
       <RobotDock position={dockPosition} hasRobot={robotAtDock} />
 
-      {/* Courts */}
-      {courtPositions.map(({ x, z, id }) => {
-        const courtState = courts.get(id);
-        if (!courtState) return null;
+      {/* Courts - using instanced rendering */}
+      <InstancedCourts
+        courtPositions={courtPositions}
+        onCourtSelect={handleCourtSelect}
+        surfaceType={surfaceType}
+        showNet={showNet}
+        showLines={showLines}
+      />
 
-        return (
-          <group key={id}>
-            <SelectableCourt
-              courtState={courtState}
-              surfaceType={surfaceType}
-              showNet={showNet}
-              showLines={showLines}
-              position={{ x, z }}
-              isSelected={selectedCourtIds.has(id)}
-              onSelect={handleCourtSelect}
-            />
-            <CourtStatusLabel courtState={courtState} position={{ x, z }} />
-            
-            {/* Game session for active courts */}
-            {activeBookingsByCourtId.has(id) && (
-              <GameSession
-                courtId={id}
-                courtPosition={{ x, z }}
-                isActive={true}
-              />
-            )}
-          </group>
-        );
-      })}
+      {/* Court labels and game sessions (using CourtGroup with per-court subscriptions) */}
+      {courtPositions.map(({ x, z, id }) => (
+        <CourtGroup
+          key={id}
+          courtId={id}
+          position={{ x, z }}
+          onCourtSelect={handleCourtSelect}
+          surfaceType={surfaceType}
+          showNet={showNet}
+          showLines={showLines}
+        />
+      ))}
 
       {/* Cleaning robots */}
       {robots.map((robot) => (
@@ -212,7 +230,7 @@ function HomebaseScene() {
 export function HomebaseCanvas() {
   const { config, spacing } = useFacilityStore();
   const { config: perfConfig } = usePerformanceStore();
-  
+
   // Calculate initial camera position
   const initialCameraPosition = useMemo(() => {
     const rows = config.rows;
@@ -221,7 +239,7 @@ export function HomebaseCanvas() {
     const facilityLength = rows * (COURT_LENGTH + spacing);
     const maxDim = Math.max(facilityWidth, facilityLength);
     const distance = maxDim * 1.5;
-    
+
     return [
       facilityWidth / 2 + distance * 0.4,
       distance * 0.6,
@@ -234,7 +252,7 @@ export function HomebaseCanvas() {
       <Canvas
         shadows={perfConfig.shadows}
         dpr={perfConfig.pixelRatio}
-        gl={{ 
+        gl={{
           antialias: perfConfig.antialiasing,
           powerPreference: 'high-performance',
         }}

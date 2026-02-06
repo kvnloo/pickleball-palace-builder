@@ -39,29 +39,21 @@ export const NET_HEIGHT_SIDES = 36 * INCH_TO_M;  // 0.9144m
 export const NET_HEIGHT_CENTER = 34 * INCH_TO_M; // 0.8636m
 
 // Surface materials configuration
-export const SURFACE_MATERIALS: Record<SurfaceType, { color: string; roughness: number; metalness: number; name: string }> = {
+export const SURFACE_MATERIALS: Record<SurfaceType, { color: string; name: string }> = {
   hardwood: {
     color: '#c4a574',
-    roughness: 0.4,
-    metalness: 0.1,
     name: 'Hardwood (Maple Gym)',
   },
   rubber: {
     color: '#3d3d3d',
-    roughness: 0.7,
-    metalness: 0.0,
     name: 'Rubber Sports Floor',
   },
   polypropylene: {
     color: '#2563eb',
-    roughness: 0.5,
-    metalness: 0.05,
     name: 'Polypropylene Tiles',
   },
   vinyl: {
     color: '#94a3b8',
-    roughness: 0.3,
-    metalness: 0.05,
     name: 'Vinyl/PU Flooring',
   },
 };

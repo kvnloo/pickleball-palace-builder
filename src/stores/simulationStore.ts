@@ -1,3 +1,11 @@
+/**
+ * simulationStore - GC-free simulation state management
+ *
+ * GC Elimination: The tick() hot path uses in-place mutation:
+ *   - No new Map(s.courts) cloning in tick handlers
+ *   - No object spread { ...c, status: ... } for court updates
+ *   - Mutate court properties directly, bump version for React sync
+ */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
@@ -13,6 +21,9 @@ import {
 
 type SimulationSpeed = 1 | 4 | 10;
 
+// Version counter for React sync (incremented on state changes)
+let _simVersion = 0;
+
 interface SimulationStore {
   // Time
   currentTime: number; // minutes since midnight
@@ -26,6 +37,9 @@ interface SimulationStore {
   robots: Robot[];
   selectedCourtIds: Set<string>;
   multiSelectMode: boolean;
+
+  // Version for React sync
+  _simVersion: number;
 
   // Dock position
   dockPosition: { x: number; z: number };
@@ -112,6 +126,7 @@ export const useSimulationStore = create<SimulationStore>()(
       ],
       selectedCourtIds: new Set(),
       multiSelectMode: false,
+      _simVersion: 0,
       dockPosition: { x: -2, z: -2 },
       notifications: [],
 
@@ -122,34 +137,31 @@ export const useSimulationStore = create<SimulationStore>()(
       tick: (deltaMinutes) => {
         const state = get();
         const newTime = state.currentTime + deltaMinutes;
+        const courts = state.courts;
+        const bookings = state.bookings;
+        let changed = false;
+        const notificationsToAdd: string[] = [];
+        const cleaningJobsToAdd: string[] = [];
 
-        // Check bookings starting
-        state.bookings.forEach((booking) => {
-          const court = state.courts.get(booking.courtId);
-          if (!court) return;
+        // Check bookings starting/ending (using indexed loop for GC-free iteration)
+        for (let i = 0; i < bookings.length; i++) {
+          const booking = bookings[i];
+          const court = courts.get(booking.courtId);
+          if (!court) continue;
 
-          // Start booking
+          // Start booking - mutate court in place (no Map clone, no object spread)
           if (
             state.currentTime < booking.startTime &&
             newTime >= booking.startTime &&
             court.status === 'AVAILABLE_CLEAN'
           ) {
-            set((s) => {
-              const courts = new Map(s.courts);
-              const c = courts.get(booking.courtId);
-              if (c) {
-                courts.set(booking.courtId, {
-                  ...c,
-                  status: 'IN_USE',
-                  activeBookingId: booking.id,
-                });
-              }
-              return { courts };
-            });
-            get().addNotification(`Court ${booking.courtId.split('-').slice(1).join('-')} session started`);
+            court.status = 'IN_USE';
+            court.activeBookingId = booking.id;
+            changed = true;
+            notificationsToAdd.push(`Court ${booking.courtId.split('-').slice(1).join('-')} session started`);
           }
 
-          // End booking
+          // End booking - mutate court in place
           if (
             state.currentTime < booking.endTime &&
             newTime >= booking.endTime &&
@@ -157,26 +169,30 @@ export const useSimulationStore = create<SimulationStore>()(
             court.activeBookingId === booking.id
           ) {
             const cleanlinessDropAmount = 30 + Math.random() * 30;
-            set((s) => {
-              const courts = new Map(s.courts);
-              const c = courts.get(booking.courtId);
-              if (c) {
-                courts.set(booking.courtId, {
-                  ...c,
-                  status: 'NEEDS_CLEANING',
-                  activeBookingId: null,
-                  cleanliness: Math.max(0, c.cleanliness - cleanlinessDropAmount),
-                  lastUsedAt: newTime,
-                });
-              }
-              return { courts };
-            });
-            get().addNotification(`Court ${booking.courtId.split('-').slice(1).join('-')} needs cleaning`);
-            get().enqueueCleaningJob(booking.courtId);
+            court.status = 'NEEDS_CLEANING';
+            court.activeBookingId = null;
+            court.cleanliness = Math.max(0, court.cleanliness - cleanlinessDropAmount);
+            court.lastUsedAt = newTime;
+            changed = true;
+            notificationsToAdd.push(`Court ${booking.courtId.split('-').slice(1).join('-')} needs cleaning`);
+            cleaningJobsToAdd.push(booking.courtId);
           }
-        });
+        }
 
-        set({ currentTime: newTime });
+        // Bump version if courts changed
+        if (changed) {
+          _simVersion++;
+        }
+
+        set({ currentTime: newTime, _simVersion });
+
+        // Process deferred notifications and cleaning jobs (outside of tick hot path)
+        for (let i = 0; i < notificationsToAdd.length; i++) {
+          get().addNotification(notificationsToAdd[i]);
+        }
+        for (let i = 0; i < cleaningJobsToAdd.length; i++) {
+          get().enqueueCleaningJob(cleaningJobsToAdd[i]);
+        }
       },
 
       initializeCourts: (rows, cols, rowLengths) => {
@@ -197,43 +213,38 @@ export const useSimulationStore = create<SimulationStore>()(
             });
           }
         }
-        set({ courts });
+        _simVersion++;
+        set({ courts, _simVersion });
       },
 
       setCourtStatus: (courtId, status) => {
-        set((s) => {
-          const courts = new Map(s.courts);
-          const court = courts.get(courtId);
-          if (court) {
-            courts.set(courtId, { ...court, status });
-          }
-          return { courts };
-        });
+        const court = get().courts.get(courtId);
+        if (court) {
+          // Mutate in place (no Map clone, no object spread)
+          court.status = status;
+          _simVersion++;
+          set({ _simVersion });
+        }
       },
 
       updateCourtCleanliness: (courtId, cleanliness) => {
-        set((s) => {
-          const courts = new Map(s.courts);
-          const court = courts.get(courtId);
-          if (court) {
-            courts.set(courtId, { ...court, cleanliness: Math.min(100, Math.max(0, cleanliness)) });
-          }
-          return { courts };
-        });
+        const court = get().courts.get(courtId);
+        if (court) {
+          // Mutate in place
+          court.cleanliness = Math.min(100, Math.max(0, cleanliness));
+          _simVersion++;
+          set({ _simVersion });
+        }
       },
 
       setCourtOutOfService: (courtId, outOfService) => {
-        set((s) => {
-          const courts = new Map(s.courts);
-          const court = courts.get(courtId);
-          if (court && court.status !== 'IN_USE') {
-            courts.set(courtId, {
-              ...court,
-              status: outOfService ? 'OUT_OF_SERVICE' : 'AVAILABLE_CLEAN',
-            });
-          }
-          return { courts };
-        });
+        const court = get().courts.get(courtId);
+        if (court && court.status !== 'IN_USE') {
+          // Mutate in place
+          court.status = outOfService ? 'OUT_OF_SERVICE' : 'AVAILABLE_CLEAN';
+          _simVersion++;
+          set({ _simVersion });
+        }
       },
 
       selectCourt: (courtId) => {
@@ -277,7 +288,7 @@ export const useSimulationStore = create<SimulationStore>()(
       generateSchedule: (settings) => {
         const { startTime, endTime, sessionDuration, bufferTime, demandLevel, rows, cols, rowLengths } = settings;
         const newBookings: Booking[] = [];
-        
+
         // Get all court IDs
         const courtIds: string[] = [];
         for (let row = 0; row < rows; row++) {
@@ -299,7 +310,7 @@ export const useSimulationStore = create<SimulationStore>()(
               const types: Array<'open_play' | 'lesson' | 'reservation'> = ['open_play', 'lesson', 'reservation'];
               const type = types[Math.floor(Math.random() * types.length)];
               const playerCount: 2 | 4 = Math.random() > 0.5 ? 4 : 2;
-              
+
               newBookings.push({
                 id: generateId(),
                 courtId,
@@ -349,22 +360,18 @@ export const useSimulationStore = create<SimulationStore>()(
       },
 
       forceClean: (courtId) => {
-        set((s) => {
-          const courts = new Map(s.courts);
-          const court = courts.get(courtId);
-          if (court && court.status !== 'IN_USE') {
-            courts.set(courtId, {
-              ...court,
-              status: 'AVAILABLE_CLEAN',
-              cleanliness: 100,
-              lastCleanedAt: s.currentTime,
-            });
-          }
-          return { 
-            courts,
+        const court = get().courts.get(courtId);
+        if (court && court.status !== 'IN_USE') {
+          // Mutate in place
+          court.status = 'AVAILABLE_CLEAN';
+          court.cleanliness = 100;
+          court.lastCleanedAt = get().currentTime;
+          _simVersion++;
+          set((s) => ({
+            _simVersion,
             cleaningQueue: s.cleaningQueue.filter((j) => j.courtId !== courtId),
-          };
-        });
+          }));
+        }
         get().addNotification(`Court ${courtId.split('-').slice(1).join('-')} marked as cleaned`);
       },
 
@@ -373,36 +380,45 @@ export const useSimulationStore = create<SimulationStore>()(
         const court = state.courts.get(courtId);
         if (!court || court.status !== 'IN_USE') return;
 
-        set((s) => {
-          const courts = new Map(s.courts);
-          courts.set(courtId, {
-            ...court,
-            status: 'NEEDS_CLEANING',
-            activeBookingId: null,
-            cleanliness: Math.max(0, court.cleanliness - 40),
-            lastUsedAt: s.currentTime,
-          });
-          return { courts };
-        });
+        // Mutate in place
+        court.status = 'NEEDS_CLEANING';
+        court.activeBookingId = null;
+        court.cleanliness = Math.max(0, court.cleanliness - 40);
+        court.lastUsedAt = state.currentTime;
+        _simVersion++;
+        set({ _simVersion });
+
         get().enqueueCleaningJob(courtId);
         get().addNotification(`Session ended early on Court ${courtId.split('-').slice(1).join('-')}`);
       },
 
       updateRobot: (robotId, updates) => {
-        set((s) => ({
-          robots: s.robots.map((r) => (r.id === robotId ? { ...r, ...updates } : r)),
-        }));
+        const state = get();
+        // Find and mutate robot in place
+        for (let i = 0; i < state.robots.length; i++) {
+          const robot = state.robots[i];
+          if (robot.id === robotId) {
+            // Apply updates directly to robot object
+            Object.assign(robot, updates);
+            break;
+          }
+        }
+        _simVersion++;
+        set({ _simVersion });
       },
 
       returnRobotToDock: (robotId) => {
-        const dock = get().dockPosition;
-        set((s) => ({
-          robots: s.robots.map((r) =>
-            r.id === robotId
-              ? { ...r, status: 'returning', targetCourtId: null }
-              : r
-          ),
-        }));
+        const state = get();
+        for (let i = 0; i < state.robots.length; i++) {
+          const robot = state.robots[i];
+          if (robot.id === robotId) {
+            robot.status = 'returning';
+            robot.targetCourtId = null;
+            break;
+          }
+        }
+        _simVersion++;
+        set({ _simVersion });
       },
 
       addNotification: (message) => {

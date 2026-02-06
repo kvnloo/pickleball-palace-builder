@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, memo } from 'react';
 import * as THREE from 'three';
 import { RobotStatus } from '@/types/facility';
 
@@ -22,19 +22,19 @@ const wheelGeometry = new THREE.CylinderGeometry(0.06, 0.06, 0.04, 12);
 const brushGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.15, 8);
 
 // Shared materials
-const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#e8e8e8', roughness: 0.3, metalness: 0.1 });
-const baseMaterial = new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.6, metalness: 0.2 });
-const screenMaterial = new THREE.MeshStandardMaterial({ color: '#1a1a2e', roughness: 0.1, metalness: 0.3 });
-const screenActiveMaterial = new THREE.MeshStandardMaterial({ color: '#00ff88', roughness: 0.1, metalness: 0.3, emissive: '#00ff88', emissiveIntensity: 0.3 });
-const wheelMaterial = new THREE.MeshStandardMaterial({ color: '#1a1a1a', roughness: 0.8 });
-const brushMaterial = new THREE.MeshStandardMaterial({ color: '#4a9eff', roughness: 0.7 });
+const bodyMaterial = new THREE.MeshLambertMaterial({ color: '#e8e8e8' });
+const baseMaterial = new THREE.MeshLambertMaterial({ color: '#2a2a2a' });
+const screenMaterial = new THREE.MeshLambertMaterial({ color: '#1a1a2e' });
+const screenActiveMaterial = new THREE.MeshLambertMaterial({ color: '#00ff88', emissive: '#00ff88', emissiveIntensity: 0.3 });
+const wheelMaterial = new THREE.MeshLambertMaterial({ color: '#1a1a1a' });
+const brushMaterial = new THREE.MeshLambertMaterial({ color: '#4a9eff' });
 
 // Pre-created status light materials
 const statusLightMaterials = {
-  cleaning: new THREE.MeshStandardMaterial({ color: '#8b5cf6', emissive: '#8b5cf6', emissiveIntensity: 0.8 }),
-  navigating: new THREE.MeshStandardMaterial({ color: '#3b82f6', emissive: '#3b82f6', emissiveIntensity: 0.8 }),
-  charging: new THREE.MeshStandardMaterial({ color: '#22c55e', emissive: '#22c55e', emissiveIntensity: 0.8 }),
-  idle: new THREE.MeshStandardMaterial({ color: '#94a3b8', emissive: '#94a3b8', emissiveIntensity: 0.8 }),
+  cleaning: new THREE.MeshLambertMaterial({ color: '#8b5cf6', emissive: '#8b5cf6', emissiveIntensity: 0.8 }),
+  navigating: new THREE.MeshLambertMaterial({ color: '#3b82f6', emissive: '#3b82f6', emissiveIntensity: 0.8 }),
+  charging: new THREE.MeshLambertMaterial({ color: '#22c55e', emissive: '#22c55e', emissiveIntensity: 0.8 }),
+  idle: new THREE.MeshLambertMaterial({ color: '#94a3b8', emissive: '#94a3b8', emissiveIntensity: 0.8 }),
 };
 
 // Status light geometry
@@ -42,12 +42,13 @@ const statusLightGeometry = new THREE.SphereGeometry(0.03, 8, 8);
 
 // Pre-created battery materials
 const batteryMaterials = {
-  high: new THREE.MeshStandardMaterial({ color: '#22c55e', emissive: '#22c55e', emissiveIntensity: 0.5 }),
-  medium: new THREE.MeshStandardMaterial({ color: '#f59e0b', emissive: '#f59e0b', emissiveIntensity: 0.5 }),
-  low: new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#ef4444', emissiveIntensity: 0.5 }),
+  high: new THREE.MeshLambertMaterial({ color: '#22c55e', emissive: '#22c55e', emissiveIntensity: 0.5 }),
+  medium: new THREE.MeshLambertMaterial({ color: '#f59e0b', emissive: '#f59e0b', emissiveIntensity: 0.5 }),
+  low: new THREE.MeshLambertMaterial({ color: '#ef4444', emissive: '#ef4444', emissiveIntensity: 0.5 }),
 };
 
-export function CleaningRobotCC1({ position, rotation = 0, status, battery }: CleaningRobotCC1Props) {
+// Component implementation (note: export function CleaningRobotCC1 is memo-wrapped for performance)
+export const CleaningRobotCC1 = memo(function CleaningRobotCC1({ position, rotation = 0, status, battery }: CleaningRobotCC1Props) {
   const groupRef = useRef<THREE.Group>(null);
 
   const currentScreenMaterial = status === 'idle' || status === 'charging' ? screenMaterial : screenActiveMaterial;
@@ -113,11 +114,11 @@ export function CleaningRobotCC1({ position, rotation = 0, status, battery }: Cl
       />
 
       {/* Status light */}
-      <mesh 
+      <mesh
         position={[0, ROBOT_HEIGHT + 0.05, 0]}
         geometry={statusLightGeometry}
         material={statusLightMaterial}
       />
     </group>
   );
-}
+});

@@ -80,7 +80,7 @@ function FacilityScene() {
         receiveShadow
       >
         <planeGeometry args={[bounds.width, bounds.length]} />
-        <meshStandardMaterial color="#1f2937" roughness={0.9} />
+        <meshLambertMaterial color="#1f2937" />
       </mesh>
 
       {/* Courts */}

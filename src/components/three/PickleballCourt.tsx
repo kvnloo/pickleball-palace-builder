@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import * as THREE from 'three';
 import {
   SurfaceType,
@@ -30,16 +30,14 @@ const sharedGeometries = {
 
 // Shared materials - created once
 const sharedMaterials = {
-  line: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, metalness: 0 }),
-  net: new THREE.MeshStandardMaterial({
+  line: new THREE.MeshLambertMaterial({ color: '#ffffff' }),
+  net: new THREE.MeshLambertMaterial({
     color: '#1a1a1a',
-    roughness: 0.8,
-    metalness: 0,
     transparent: true,
     opacity: 0.7,
     side: THREE.DoubleSide,
   }),
-  post: new THREE.MeshStandardMaterial({ color: '#4a4a4a', roughness: 0.3, metalness: 0.6 }),
+  post: new THREE.MeshLambertMaterial({ color: '#4a4a4a', emissive: '#1a1a1a' }),
 };
 
 // Create net geometry with sag - net spans across X-axis (width of court)
@@ -68,7 +66,8 @@ const createNetGeometry = () => {
 
 const netGeometry = createNetGeometry();
 
-export function PickleballCourt({
+// Component implementation (note: export function PickleballCourt is memo-wrapped for performance)
+export const PickleballCourt = memo(function PickleballCourt({
   surfaceType,
   showNet = true,
   showLines = true,
@@ -76,10 +75,8 @@ export function PickleballCourt({
   // Memoize surface material (changes with surfaceType)
   const surfaceMaterial = useMemo(() => {
     const config = SURFACE_MATERIALS[surfaceType];
-    return new THREE.MeshStandardMaterial({
+    return new THREE.MeshLambertMaterial({
       color: config.color,
-      roughness: config.roughness,
-      metalness: config.metalness,
     });
   }, [surfaceType]);
 
@@ -179,4 +176,4 @@ export function PickleballCourt({
       )}
     </group>
   );
-}
+});

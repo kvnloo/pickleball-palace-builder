@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { Html } from '@react-three/drei';
 import { CourtState, getStatusLabel, getStatusColor } from '@/types/facility';
 
@@ -7,7 +7,7 @@ interface CourtStatusLabelProps {
   position: { x: number; z: number };
 }
 
-export function CourtStatusLabel({ courtState, position }: CourtStatusLabelProps) {
+export const CourtStatusLabel = memo(function CourtStatusLabel({ courtState, position }: CourtStatusLabelProps) {
   const statusColor = getStatusColor(courtState.status);
   const statusLabel = getStatusLabel(courtState.status);
   
@@ -40,4 +40,4 @@ export function CourtStatusLabel({ courtState, position }: CourtStatusLabelProps
       </div>
     </Html>
   );
-}
+});
